@@ -2,7 +2,7 @@
   "name": "copilot-premium-request-tracker",
   "displayName": "Copilot Usage Insights",
   "description": "See your GitHub Copilot premium request usage directly in the VS Code status bar.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "sin2akshay",
   "license": "MIT",
   "pricing": "Free",

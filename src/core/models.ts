@@ -30,6 +30,17 @@ export type StatusBarMode =
   | 'circles'
   | 'hybrid';
 
+/** Snapshot of a single quota category from the API. */
+export interface QuotaSnapshot {
+  id: string;
+  unlimited: boolean;
+  percentRemaining: number;
+  remaining: number;
+  entitlement: number;
+  overageCount: number;
+  overagePermitted: boolean;
+}
+
 /** Usage data parsed from the copilot_internal/user endpoint. */
 export interface UsageData {
   used: number;
@@ -41,6 +52,13 @@ export interface UsageData {
   overageUsed: number;
   plan: string;
   resetDate: Date;
+  chatQuota: QuotaSnapshot | null;
+  completionsQuota: QuotaSnapshot | null;
+  premiumQuota: QuotaSnapshot | null;
+  chatEnabled: boolean;
+  mcpEnabled: boolean;
+  assignedDate: Date | null;
+  accessType: string;
 }
 
 /** Extension configuration snapshot. */
@@ -59,4 +77,5 @@ export interface DetailViewModel {
   lastUpdatedAt: string | null;
   isOffline: boolean;
   login: string | null;
+  config: ExtensionConfig;
 }

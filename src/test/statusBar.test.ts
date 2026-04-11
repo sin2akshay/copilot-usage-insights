@@ -38,6 +38,13 @@ const baseData: UsageData = {
   overageUsed: 0,
   plan: 'Pro',
   resetDate: new Date(),
+  chatQuota: null,
+  completionsQuota: null,
+  premiumQuota: null,
+  chatEnabled: true,
+  mcpEnabled: true,
+  assignedDate: null,
+  accessType: 'unknown',
 };
 
 const baseConfig: ExtensionConfig = {
@@ -99,6 +106,13 @@ describe('computeDisplayPct', () => {
       overageUsed: 0,
       plan: 'Pro',
       resetDate: new Date(),
+      chatQuota: null,
+      completionsQuota: null,
+      premiumQuota: null,
+      chatEnabled: true,
+      mcpEnabled: true,
+      assignedDate: null,
+      accessType: 'unknown',
     };
     expect(computeDisplayPct(data)).toBe(50);
   });
@@ -114,6 +128,13 @@ describe('computeDisplayPct', () => {
       overageUsed: 33,
       plan: 'Pro',
       resetDate: new Date(),
+      chatQuota: null,
+      completionsQuota: null,
+      premiumQuota: null,
+      chatEnabled: true,
+      mcpEnabled: true,
+      assignedDate: null,
+      accessType: 'unknown',
     };
     expect(computeDisplayPct(data)).toBe(111);
   });
@@ -129,6 +150,13 @@ describe('computeDisplayPct', () => {
       overageUsed: 0,
       plan: 'Pro',
       resetDate: new Date(),
+      chatQuota: null,
+      completionsQuota: null,
+      premiumQuota: null,
+      chatEnabled: true,
+      mcpEnabled: true,
+      assignedDate: null,
+      accessType: 'unknown',
     };
     expect(computeDisplayPct(data)).toBe(67);
   });

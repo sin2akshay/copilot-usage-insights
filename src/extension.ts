@@ -35,6 +35,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     disconnect: () => doDisconnect(),
     signIn: () => refresh(true, true),
     openSettings: () => void vscode.commands.executeCommand('workbench.action.openSettings', CONFIG_SECTION),
+    updateSetting: (key: string, value: unknown) => {
+      const allowedKeys = [
+        'refreshIntervalMinutes',
+        'threshold.enabled',
+        'threshold.warning',
+        'threshold.critical',
+        'statusBarMode',
+        'segmentedBarWidth',
+      ];
+      if (!allowedKeys.includes(key)) { return; }
+      const cfg = vscode.workspace.getConfiguration(CONFIG_SECTION);
+      void cfg.update(key, value, vscode.ConfigurationTarget.Global);
+    },
   });
 
   context.subscriptions.push(
@@ -167,6 +180,7 @@ function getDetailViewModel(): DetailViewModel {
     lastUpdatedAt: lastUpdatedAt?.toISOString() ?? null,
     isOffline,
     login: auth.getLogin(globalState) ?? null,
+    config: getConfig(),
   };
 }
 

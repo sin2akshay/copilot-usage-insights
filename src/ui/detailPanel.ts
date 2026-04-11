@@ -9,6 +9,7 @@ export interface DetailPanelHandlers {
   disconnect: () => void | Promise<void>;
   signIn: () => void | Promise<void>;
   openSettings: () => void | Promise<void>;
+  updateSetting: (key: string, value: unknown) => void | Promise<void>;
 }
 
 export class DetailPanel implements vscode.Disposable {
@@ -44,7 +45,7 @@ export class DetailPanel implements vscode.Disposable {
     );
 
     this.panel.webview.html = this.renderHtml(this.panel.webview);
-    this.panel.webview.onDidReceiveMessage((message: { type?: string }) => {
+    this.panel.webview.onDidReceiveMessage((message: { type?: string; key?: string; value?: unknown }) => {
       switch (message?.type) {
         case 'refresh':
           void this.handlers.refresh();
@@ -57,6 +58,11 @@ export class DetailPanel implements vscode.Disposable {
           break;
         case 'openSettings':
           void this.handlers.openSettings();
+          break;
+        case 'updateSetting':
+          if (typeof message.key === 'string') {
+            void this.handlers.updateSetting(message.key, message.value);
+          }
           break;
       }
     });
@@ -82,7 +88,11 @@ export class DetailPanel implements vscode.Disposable {
     const serializable = {
       ...model,
       data: model.data
-        ? { ...model.data, resetDate: model.data.resetDate.toISOString() }
+        ? {
+            ...model.data,
+            resetDate: model.data.resetDate.toISOString(),
+            assignedDate: model.data.assignedDate?.toISOString() ?? null,
+          }
         : null,
     };
     await this.panel.webview.postMessage({ type: 'state', value: serializable });

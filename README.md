@@ -11,6 +11,18 @@ On sign-in the extension calls the GitHub Copilot internal API (`copilot_interna
 - **Overage tracking** — if you're on a plan with paid overage, the status bar will exceed 100%.
 - **Offline recovery** — if the network is unavailable the last known values are shown; the extension retries automatically every 10 seconds.
 
+## Dashboard
+
+Click the status bar item or run **Copilot Usage Insights: Open Details** to open the dashboard. It includes:
+
+- **Usage gauge** — animated SVG ring showing premium request consumption with color thresholds.
+- **Key stats** — days until reset, remaining requests, reset date, and overage at a glance.
+- **Quota breakdown** — Chat, Completions, and Premium Interactions cards with usage bars.
+- **Account info** — plan type, Chat/MCP enabled status, and membership date.
+- **Inline settings** — change status bar mode, refresh interval, bar width, and color thresholds without leaving the dashboard.
+
+The dashboard uses VS Code CSS variables throughout, so it automatically adapts to any light, dark, or high-contrast theme.
+
 ## Status Bar Modes
 
 Configure `copilotUsageInsights.statusBarMode` to choose how usage is shown:

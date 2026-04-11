@@ -1,4 +1,4 @@
-import type { ApiErrorCode, UsageData } from '../core/models';
+import type { ApiErrorCode, QuotaSnapshot, UsageData } from '../core/models';
 import { PLAN_LABELS } from '../core/models';
 
 const COPILOT_INTERNAL_USER_URL = 'https://api.github.com/copilot_internal/user';
@@ -68,6 +68,17 @@ export async function fetchUsage(token: string): Promise<UsageData> {
   const quotaSnapshots = data.quota_snapshots as Record<string, unknown> | undefined;
   const pi = quotaSnapshots?.premium_interactions as Record<string, unknown> | undefined;
 
+  // Parse individual quota snapshots
+  const chatQuota = parseQuotaSnapshot('chat', quotaSnapshots?.chat as Record<string, unknown> | undefined);
+  const completionsQuota = parseQuotaSnapshot('completions', quotaSnapshots?.completions as Record<string, unknown> | undefined);
+  const premiumQuota = parseQuotaSnapshot('premium_interactions', pi);
+
+  // Parse account-level fields
+  const chatEnabled = data.chat_enabled === true;
+  const mcpEnabled = data.is_mcp_enabled === true;
+  const assignedDate = typeof data.assigned_date === 'string' ? parseDateOrFallbackNull(data.assigned_date) : null;
+  const accessType = (data.access_type_sku as string) ?? 'unknown';
+
   if (!pi || (pi.percent_remaining == null)) {
     const unlimited = !!pi?.unlimited;
     return {
@@ -82,6 +93,13 @@ export async function fetchUsage(token: string): Promise<UsageData> {
       resetDate: data.quota_reset_date
         ? parseDateOrFallback(data.quota_reset_date as string)
         : getNextMonthReset(),
+      chatQuota,
+      completionsQuota,
+      premiumQuota,
+      chatEnabled,
+      mcpEnabled,
+      assignedDate,
+      accessType,
     };
   }
 
@@ -110,7 +128,32 @@ export async function fetchUsage(token: string): Promise<UsageData> {
     overageUsed: (pi.overage_count as number) ?? 0,
     plan,
     resetDate,
+    chatQuota,
+    completionsQuota,
+    premiumQuota,
+    chatEnabled,
+    mcpEnabled,
+    assignedDate,
+    accessType,
   };
+}
+
+function parseQuotaSnapshot(id: string, raw: Record<string, unknown> | undefined): QuotaSnapshot | null {
+  if (!raw) { return null; }
+  return {
+    id,
+    unlimited: !!raw.unlimited,
+    percentRemaining: Number(raw.percent_remaining) || 0,
+    remaining: (raw.remaining as number) ?? 0,
+    entitlement: (raw.entitlement as number) ?? 0,
+    overageCount: (raw.overage_count as number) ?? 0,
+    overagePermitted: !!raw.overage_permitted,
+  };
+}
+
+function parseDateOrFallbackNull(raw: string): Date | null {
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function getNextMonthReset(): Date {
