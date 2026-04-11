@@ -2,8 +2,6 @@ import * as vscode from 'vscode';
 
 import type { ExtensionConfig, StatusBarMode, UsageData } from '../core/models';
 
-const BILLING_URL = 'https://github.com/settings/billing/premium_requests_usage';
-
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
 
@@ -109,44 +107,70 @@ export class StatusBar implements vscode.Disposable {
     isStale: boolean,
   ): vscode.MarkdownString {
     const md = new vscode.MarkdownString('', true);
-    md.isTrusted = { enabledCommands: ['copilotUsageInsights.refresh'] };
-    md.appendMarkdown('**GitHub Copilot Usage**\n\nPlan: ');
-    md.appendText(data.plan);
-    md.appendMarkdown('\n\n');
+    md.isTrusted = { enabledCommands: ['copilotUsageInsights.refresh', 'copilotUsageInsights.openDetails'] };
+    md.supportHtml = true;
 
+    // ── Header
+    md.appendMarkdown(`**$(copilot) Copilot Usage** &nbsp;·&nbsp; ${escapeMarkdown(data.plan)}\n\n`);
+    md.appendMarkdown('---\n\n');
+
+    // ── Premium requests
     if (data.unlimited) {
-      md.appendMarkdown(`Quota: Unlimited &nbsp;[$(graph)](${BILLING_URL})\n\n`);
+      md.appendMarkdown('$(star)&ensp;Premium Requests: **Unlimited**\n\n');
     } else if (data.noData) {
-      md.appendMarkdown(`No premium quota &nbsp;[$(graph)](${BILLING_URL})\n\n`);
+      md.appendMarkdown('$(star)&ensp;Premium Requests: **—**\n\n');
     } else {
-      md.appendMarkdown(
-        `Used: ${data.used} / ${data.quota} (${data.usedPct}%) &nbsp;[$(graph)](${BILLING_URL})\n\n`,
-      );
+      const remaining = Math.max(0, data.quota - data.used);
+      const barWidth = 20;
+      const filled = Math.max(0, Math.round((data.usedPct / 100) * barWidth));
+      const empty = barWidth - filled;
+      const bar = '▮'.repeat(filled) + '▯'.repeat(empty);
+
+      md.appendMarkdown(`$(star)&ensp;**${data.used}** / ${data.quota} &nbsp;used&ensp;·&ensp;**${remaining}** remaining\n\n`);
+      md.appendMarkdown(`\`${bar}\` &nbsp;${data.usedPct}%\n\n`);
+
       if (data.overageEnabled && data.overageUsed > 0) {
-        md.appendMarkdown(`Overage: ${data.overageUsed} requests\n\n`);
+        md.appendMarkdown(`$(warning)&ensp;Overage: **${data.overageUsed}** requests beyond quota\n\n`);
       }
-      const resetStr = data.resetDate.toLocaleString(undefined, {
-        year: 'numeric',
+    }
+
+    // ── Chat & completions (compact)
+    const chatStr = data.chatQuota
+      ? (data.chatQuota.unlimited ? 'Unlimited' : `${data.chatQuota.remaining} left`)
+      : '—';
+    const compStr = data.completionsQuota
+      ? (data.completionsQuota.unlimited ? 'Unlimited' : `${data.completionsQuota.remaining} left`)
+      : '—';
+    md.appendMarkdown(`$(comment)&ensp;Chat: ${chatStr} &nbsp;&nbsp; $(code)&ensp;Completions: ${compStr}\n\n`);
+
+    md.appendMarkdown('---\n\n');
+
+    // ── Reset date
+    if (!data.unlimited && !data.noData) {
+      const now = new Date();
+      const daysLeft = Math.max(0, Math.ceil((data.resetDate.getTime() - now.getTime()) / 86_400_000));
+      const resetStr = data.resetDate.toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+        year: 'numeric',
       });
-      md.appendMarkdown('Reset: ');
-      md.appendText(resetStr);
-      md.appendMarkdown('\n\n');
+      md.appendMarkdown(`$(calendar)&ensp;Resets **${resetStr}** &nbsp;(${daysLeft}d)\n\n`);
     }
 
+    // ── Updated + actions
     if (lastUpdatedAt) {
-      md.appendMarkdown(`Updated at ${formatTimestamp(lastUpdatedAt)} `);
+      md.appendMarkdown(`$(clock)&ensp;${formatTimestamp(lastUpdatedAt)}`);
     }
-    md.appendMarkdown('[$(refresh)](command:copilotUsageInsights.refresh)');
+    md.appendMarkdown(
+      ` &nbsp; [$(refresh)&ensp;Refresh](command:copilotUsageInsights.refresh)`
+      + ` &nbsp; [$(dashboard)&ensp;Dashboard](command:copilotUsageInsights.openDetails)`,
+    );
 
     if (isRateLimited) {
-      md.appendMarkdown('\n\nRate limit \u00b7 data may be outdated');
+      md.appendMarkdown('\n\n$(alert)&ensp;Rate limited · data may be outdated');
     }
     if (isStale) {
-      md.appendMarkdown('\n\nOffline \u00b7 data may be outdated');
+      md.appendMarkdown('\n\n$(alert)&ensp;Offline · data may be outdated');
     }
 
     return md;
@@ -212,4 +236,8 @@ function formatTimestamp(date: Date): string {
   const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
   if (sameDay) { return time; }
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${time}`;
+}
+
+function escapeMarkdown(text: string): string {
+  return text.replace(/[\\`*_{}[\]()#+\-.!|]/g, '\\$&');
 }

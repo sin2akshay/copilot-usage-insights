@@ -120,15 +120,10 @@ body {
   stroke-linecap: round;
   transform: rotate(-90deg);
   transform-origin: 70px 70px;
-  animation: gauge-fill 1s ease-out;
 }
 .gauge-arc.ok { stroke: var(--ok); }
 .gauge-arc.warn { stroke: var(--warn); }
 .gauge-arc.crit { stroke: var(--crit); }
-
-@keyframes gauge-fill {
-  from { stroke-dashoffset: 351.86; }
-}
 
 .gauge-value {
   font-size: 26px;

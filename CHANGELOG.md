@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.1
+
+- Fixed the usage gauge ring — arc now correctly fills proportional to usage instead of showing a full circle.
+- Switched gauge from `stroke-dashoffset` to two-value `stroke-dasharray` for reliable partial-fill rendering.
+- Redesigned the status bar hover tooltip — now shows a visual progress bar, Chat/Completions quotas, days-until-reset countdown, and action links (Refresh / Dashboard).
+- Tooltip uses codicons, horizontal rules, and structured layout for better readability.
+
 ## 0.4.0
 
 - **Redesigned dashboard** — replaced the minimal detail panel with a rich, theme-aware dashboard featuring an SVG usage gauge, quota breakdown cards, account info, and inline settings.

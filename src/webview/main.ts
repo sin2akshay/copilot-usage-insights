@@ -131,9 +131,10 @@ function render(model: DetailViewModelSerialized): void {
     }
   }
 
-  const gaugeOffset = data.unlimited
-    ? 0
-    : GAUGE_CIRCUMFERENCE * (1 - Math.min(gaugePercent, 100) / 100);
+  const gaugeArc = data.unlimited
+    ? GAUGE_CIRCUMFERENCE
+    : GAUGE_CIRCUMFERENCE * Math.min(gaugePercent, 100) / 100;
+  const gaugeGap = GAUGE_CIRCUMFERENCE - gaugeArc;
 
   const modeOptions = STATUS_BAR_MODES.map(m =>
     `<option value="${m.value}" ${m.value === config.statusBarMode ? 'selected' : ''}>${esc(m.label)} — ${esc(m.desc)}</option>`,
@@ -165,8 +166,7 @@ function render(model: DetailViewModelSerialized): void {
             <circle
               class="gauge-arc ${gaugeColorClass}"
               cx="70" cy="70" r="${GAUGE_RADIUS}"
-              stroke-dasharray="${GAUGE_CIRCUMFERENCE}"
-              style="stroke-dashoffset: ${gaugeOffset}"
+              stroke-dasharray="${gaugeArc} ${gaugeGap}"
             />
             <text class="gauge-value" x="70" y="${data.unlimited ? 70 : 62}" dominant-baseline="central" text-anchor="middle">
               ${esc(gaugeLabel)}
