@@ -1,0 +1,174 @@
+{
+  "name": "copilot-premium-request-tracker",
+  "displayName": "Copilot Usage Insights",
+  "description": "See your GitHub Copilot premium request usage directly in the VS Code status bar.",
+  "version": "0.3.0",
+  "publisher": "sin2akshay",
+  "license": "MIT",
+  "pricing": "Free",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "preview": true,
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#0f172a",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sin2akshay/copilot-premium-request-tracker.git"
+  },
+  "homepage": "https://github.com/sin2akshay/copilot-premium-request-tracker#readme",
+  "bugs": {
+    "url": "https://github.com/sin2akshay/copilot-premium-request-tracker/issues"
+  },
+  "keywords": [
+    "copilot",
+    "usage",
+    "status-bar",
+    "github",
+    "ai"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilotUsageInsights.signIn",
+        "title": "Copilot Usage Insights: Sign In"
+      },
+      {
+        "command": "copilotUsageInsights.refresh",
+        "title": "Copilot Usage Insights: Refresh"
+      },
+      {
+        "command": "copilotUsageInsights.openDetails",
+        "title": "Copilot Usage Insights: Open Details"
+      },
+      {
+        "command": "copilotUsageInsights.disconnect",
+        "title": "Copilot Usage Insights: Disconnect Account"
+      },
+      {
+        "command": "copilotUsageInsights.debugDumpApiResponse",
+        "title": "Copilot Usage Insights: Debug — Dump Raw API Response"
+      },
+      {
+        "command": "copilotUsageInsights.openSettings",
+        "title": "Copilot Usage Insights: Open Settings"
+      }
+    ],
+    "configuration": {
+      "title": "Copilot Usage Insights",
+      "properties": {
+        "copilotUsageInsights.refreshIntervalMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 60,
+          "markdownDescription": "How often (in minutes) the extension refreshes your Copilot usage data from GitHub."
+        },
+        "copilotUsageInsights.threshold.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable color-coded warnings in the status bar when usage exceeds configured thresholds."
+        },
+        "copilotUsageInsights.threshold.warning": {
+          "type": "number",
+          "default": 75,
+          "minimum": 0,
+          "maximum": 100,
+          "markdownDescription": "Usage percentage at which the status bar turns warning color."
+        },
+        "copilotUsageInsights.threshold.critical": {
+          "type": "number",
+          "default": 90,
+          "minimum": 0,
+          "maximum": 100,
+          "markdownDescription": "Usage percentage at which the status bar turns critical/error color."
+        },
+        "copilotUsageInsights.statusBarMode": {
+          "type": "string",
+          "enum": [
+            "count",
+            "percent",
+            "countPercent",
+            "remaining",
+            "segmented",
+            "blocks",
+            "thinBlocks",
+            "dots",
+            "circles",
+            "hybrid"
+          ],
+          "enumDescriptions": [
+            "150/300 — used / quota",
+            "50% — percentage used",
+            "150/300 (50%) — used, quota, and percentage",
+            "150 left — remaining requests",
+            "[■■■■□□□□] 50% — square segments with percentage",
+            "████░░░░ 50% — block segments with percentage",
+            "▰▰▰▰▱▱▱▱ 50% — thin block segments with percentage",
+            "••••···· 50% — dot segments with percentage",
+            "●●●●○○○○ 50% — circle segments with percentage",
+            "150/300 [■■■■□□□□] — count and square segments"
+          ],
+          "default": "percent",
+          "markdownDescription": "Controls how usage is displayed in the status bar."
+        },
+        "copilotUsageInsights.segmentedBarWidth": {
+          "type": "number",
+          "default": 8,
+          "minimum": 4,
+          "maximum": 16,
+          "markdownDescription": "Number of segments in bar-style status bar modes (segmented, blocks, dots, circles, hybrid)."
+        }
+      }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "copilotUsageInsights.signIn"
+        },
+        {
+          "command": "copilotUsageInsights.refresh"
+        },
+        {
+          "command": "copilotUsageInsights.openDetails"
+        },
+        {
+          "command": "copilotUsageInsights.disconnect"
+        },
+        {
+          "command": "copilotUsageInsights.debugDumpApiResponse"
+        },
+        {
+          "command": "copilotUsageInsights.openSettings"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "check": "tsc --noEmit",
+    "vscode:prepublish": "npm run build",
+    "package:vsix": "npm run check && npx @vscode/vsce package",
+    "pretest": "npm run build && npm run check",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.25.5",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

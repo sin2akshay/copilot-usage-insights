@@ -1,0 +1,6 @@
+.gitignore
+.github/**
+node_modules/**
+src/**
+vitest.config.ts
+PRD-copilot-usage-status-bar.md
