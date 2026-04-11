@@ -56,10 +56,7 @@
         "title": "Copilot Usage Insights: Disconnect Account"
       },
       {
-        "command": "copilotUsageInsights.debugDumpApiResponse",
-        "title": "Copilot Usage Insights: Debug — Dump Raw API Response"
-      },
-      {
+
         "command": "copilotUsageInsights.openSettings",
         "title": "Copilot Usage Insights: Open Settings"
       }
@@ -144,9 +141,6 @@
         },
         {
           "command": "copilotUsageInsights.disconnect"
-        },
-        {
-          "command": "copilotUsageInsights.debugDumpApiResponse"
         },
         {
           "command": "copilotUsageInsights.openSettings"

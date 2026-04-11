@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { getConfig } from './core/config';
 import type { DetailViewModel, UsageData } from './core/models';
 import * as auth from './github/auth';
-import { fetchRawJson, fetchUsage } from './github/usageReports';
+import { fetchUsage } from './github/usageReports';
 import { DetailPanel } from './ui/detailPanel';
 import { StatusBar } from './ui/statusBar';
 
@@ -47,7 +47,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       detailPanel.show(getDetailViewModel());
     }),
     vscode.commands.registerCommand('copilotUsageInsights.disconnect', () => doDisconnect()),
-    vscode.commands.registerCommand('copilotUsageInsights.debugDumpApiResponse', () => dumpApiResponse()),
     vscode.commands.registerCommand('copilotUsageInsights.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', CONFIG_SECTION),
     ),
@@ -160,18 +159,6 @@ async function doDisconnect(): Promise<void> {
   statusBar.showSignIn();
   detailPanel.update(getDetailViewModel());
   void vscode.window.showInformationMessage('GitHub account disconnected.');
-}
-
-async function dumpApiResponse(): Promise<void> {
-  const session = await auth.getSession(globalState, true);
-  if (!session) {
-    void vscode.window.showWarningMessage('Sign in first to dump the API response.');
-    return;
-  }
-  const raw = await fetchRawJson(session.accessToken);
-  const json = JSON.stringify(raw, null, 2);
-  const doc = await vscode.workspace.openTextDocument({ language: 'json', content: json });
-  await vscode.window.showTextDocument(doc, { preview: true });
 }
 
 function getDetailViewModel(): DetailViewModel {

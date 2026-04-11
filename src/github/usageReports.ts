@@ -4,30 +4,6 @@ import { PLAN_LABELS } from '../core/models';
 const COPILOT_INTERNAL_USER_URL = 'https://api.github.com/copilot_internal/user';
 const REQUEST_TIMEOUT_MS = 15_000;
 
-/**
- * Fetch the raw JSON from the copilot_internal/user endpoint for debugging.
- * Returns the raw parsed object without any transformation.
- */
-export async function fetchRawJson(token: string): Promise<unknown> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const res = await fetch(COPILOT_INTERNAL_USER_URL, {
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-        'User-Agent': 'copilot-premium-request-tracker',
-      },
-    });
-    clearTimeout(timeout);
-    return { status: res.status, ok: res.ok, body: await res.json() };
-  } catch (e: unknown) {
-    clearTimeout(timeout);
-    return { error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
 class ApiError extends Error {
   code: ApiErrorCode;
   constructor(code: ApiErrorCode, message: string) {

@@ -1,117 +1,82 @@
 # Copilot Usage Insights
 
-Copilot Usage Insights is a preview VS Code extension for tracking GitHub Copilot usage through one compact status bar item and one richer detail panel.
+A VS Code extension that shows your GitHub Copilot premium request usage directly in the status bar.
 
-It combines three clearly separated sources of activity:
+## How It Works
 
-- **GitHub Copilot API** — Fetches your actual premium request usage and plan type directly from GitHub when connected.
-- **Exact tracked requests** — Requests sent through extension-owned Copilot entry points for precise counting.
-- **Heuristic local estimates** — Best-effort estimates from public VS Code editing signals.
+On sign-in the extension calls the GitHub Copilot internal API (`copilot_internal/user`) — the same endpoint used by other community Copilot usage tools — to read your actual premium request quota and consumption. No local estimation, no org-level data, no guessing.
 
-The extension stores metadata only. It does not persist prompt text, response text, or editor contents.
+- **Plan detection** — your plan (Free, Pro, Pro+, Business, Enterprise) is read from the API response, not inferred from org membership.
+- **Quota & usage** — exact `used / quota` numbers from GitHub, refreshed on a configurable interval.
+- **Overage tracking** — if you're on a plan with paid overage, the status bar will exceed 100%.
+- **Offline recovery** — if the network is unavailable the last known values are shown; the extension retries automatically every 10 seconds.
 
-## Why This Exists
+## Status Bar Modes
 
-GitHub Copilot usage is fragmented. Some requests can be tracked exactly when the extension owns the request path, some activity can only be estimated from public editor signals, and official organization data is often delayed or permission-gated. This extension keeps those sources separate instead of pretending they are all equally authoritative.
+Configure `copilotUsageInsights.statusBarMode` to choose how usage is shown:
 
-## Highlights
+| Mode | Example |
+|---|---|
+| `percent` *(default)* | `50%` |
+| `count` | `150/300` |
+| `countPercent` | `150/300 (50%)` |
+| `remaining` | `150 left` |
+| `segmented` | `[■■■■□□□□] 50%` |
+| `blocks` | `████░░░░ 50%` |
+| `thinBlocks` | `▰▰▰▰▱▱▱▱ 50%` |
+| `dots` | `••••···· 50%` |
+| `circles` | `●●●●○○○○ 50%` |
+| `hybrid` | `150/300 [■■■■□□□□]` |
 
-- Automatic plan detection and premium request usage from the GitHub Copilot API.
-- Status bar shows "Connect" before authentication, then live usage after connecting.
-- One global status bar item with configurable left or right placement and multiple visual modes.
-- Extension-owned tracked Copilot requests through a command and a chat participant.
-- Budget pacing, projected month-end usage, and remaining daily budget.
-- Recent trend sparkline and rising or flat or falling classification.
-- Detailed webview with GitHub API usage, Local Tracking, Insights, and Settings sections.
-- Disconnect and reconnect account from the command palette or the dashboard.
-- Graceful fallback to local-only insights when GitHub API data is unavailable.
+## Commands
 
-## Usage
-
-Open the command palette and use one of the extension commands, or mention `@usage-insights` in chat.
-
-- `Copilot Usage Insights: Set Up Account`
-- `Copilot Usage Insights: Open Details`
-- `Copilot Usage Insights: Refresh Stats Now`
-- `Copilot Usage Insights: Run Tracked Prompt`
-- `Copilot Usage Insights: Disconnect Account`
-- `Copilot Usage Insights: Open Settings`
-
-The chat participant supports:
-
-- `/track` to send a tracked request through the extension-owned Copilot path
-- `/usage` to summarize current usage, pacing, and trend
-
-## Account Setup
-
-On first run, the status bar shows **Connect** — click it or run the setup command. The extension will:
-
-1. Authenticate with GitHub using your existing VS Code session or a PAT.
-2. Automatically detect your Copilot plan type (Free, Pro, Pro+, etc.) from the GitHub API.
-3. Fetch your current premium request usage directly from GitHub.
-
-If the API cannot determine your plan, you'll be asked to select it manually. You can disconnect and reconnect at any time from the command palette or the dashboard.
+| Command | Description |
+|---|---|
+| `Copilot Usage Insights: Sign In` | Sign in with GitHub |
+| `Copilot Usage Insights: Refresh` | Refresh usage data now |
+| `Copilot Usage Insights: Open Details` | Open the detail panel |
+| `Copilot Usage Insights: Disconnect Account` | Disconnect and clear the session |
+| `Copilot Usage Insights: Open Settings` | Open extension settings |
 
 ## Settings
 
-The extension contributes a focused settings surface under `copilotUsageInsights` for:
-
-- Tracking mode
-- Plan preset
-- Monthly allowance
-- Paid overage assumption
-- Paid overage rate
-- Refresh interval
-- Heuristic tracking toggle
-- Status bar side
-- Status bar mode
-- Segmented bar width
-- Trend window
-- Model multipliers
+| Setting | Default | Description |
+|---|---|---|
+| `refreshIntervalMinutes` | `5` | How often to refresh (1–60 min) |
+| `threshold.enabled` | `true` | Enable color-coded threshold warnings |
+| `threshold.warning` | `75` | Warning color threshold (%) |
+| `threshold.critical` | `90` | Critical/error color threshold (%) |
+| `statusBarMode` | `percent` | Status bar display style |
+| `segmentedBarWidth` | `8` | Number of segments in bar styles (4–16) |
 
 ## Privacy
 
-- Prompt text is not persisted.
-- Response text is not persisted.
-- Editor contents are not persisted.
-- Local storage is limited to metadata such as timestamps, model identifiers, durations, counters, confidence labels, and official snapshot freshness.
+The extension stores only your GitHub login name in VS Code's global state. No prompt text, response text, or editor contents are ever read or stored. All usage data is fetched from GitHub — nothing is inferred locally.
 
 ## Development
 
 ```bash
 npm install
-npm run build
-npm test
+npm run build   # bundle with esbuild
+npm test        # vitest unit tests
+npm run check   # TypeScript type-check
 ```
 
-Launch the extension in an Extension Development Host from VS Code after building.
+Launch in an Extension Development Host from VS Code after building.
 
-## Package The Extension
+## Package
 
 ```bash
-npm install
 npm run package:vsix
 ```
 
-This generates a `.vsix` package in the repository root that can be installed with `Extensions: Install from VSIX...`.
+Produces a `.vsix` in the repository root. Install via **Extensions: Install from VSIX…**.
 
-## Publish To Marketplace
-
-Before publishing, make sure the Marketplace publisher exists and that you have logged in with `vsce` using a Marketplace PAT.
+## Publish
 
 ```bash
 npx @vscode/vsce login sin2akshay
 npx @vscode/vsce publish
-```
-
-If you want to publish a pre-release build first, use:
-
-```bash
+# or for pre-release:
 npx @vscode/vsce publish --pre-release
 ```
-
-## Caveats
-
-- The GitHub Copilot personal usage API endpoints may vary across plan types and GitHub's API evolution. The extension probes multiple endpoints and uses the first one that returns usable data.
-- The status bar intentionally stays within a single item even when the user selects forecast, pace, or trend visualizations.
-- If none of the API endpoints return data for your account, the extension falls back to local tracking estimates.
