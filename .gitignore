@@ -4,3 +4,4 @@ dist/
 *.vsix
 *.log
 src/sample_usage.json
+_product-demo.html
