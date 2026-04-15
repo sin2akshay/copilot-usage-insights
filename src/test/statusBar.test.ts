@@ -25,7 +25,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import type { ExtensionConfig, UsageData } from '../core/models';
+import type { BillingData, ExtensionConfig, UsageData } from '../core/models';
 import { computeDisplayPct, renderStatusBarText } from '../ui/statusBar';
 
 const baseData: UsageData = {
@@ -56,6 +56,8 @@ const baseConfig: ExtensionConfig = {
   statusBarGraphicMode: 'none',
   statusBarTextPosition: 'left',
   segmentedBarWidth: 8,
+  showBillingDetails: false,
+  showCostInStatusBar: false,
 };
 
 describe('renderStatusBarText', () => {
@@ -177,5 +179,47 @@ describe('computeDisplayPct', () => {
       accessType: 'unknown',
     };
     expect(computeDisplayPct(data)).toBe(67);
+  });
+});
+
+const sampleBilling: BillingData = {
+  year: 2026,
+  month: 4,
+  user: 'test',
+  items: [
+    { model: 'Claude Opus 4.6', pricePerUnit: 0.04, grossQuantity: 33, grossAmount: 1.32, discountQuantity: 33, discountAmount: 1.32, netQuantity: 0, netAmount: 0 },
+    { model: 'GPT-5.4', pricePerUnit: 0.04, grossQuantity: 29, grossAmount: 1.16, discountQuantity: 29, discountAmount: 1.16, netQuantity: 0, netAmount: 0 },
+  ],
+  totalGross: 2.48,
+  totalNet: 0,
+};
+
+const overageBilling: BillingData = {
+  ...sampleBilling,
+  totalNet: 1.20,
+};
+
+describe('renderStatusBarText (billedOnly)', () => {
+  it('renders billedOnly with no billing data', () => {
+    expect(renderStatusBarText(baseData, 50, { ...baseConfig, statusBarTextMode: 'billedOnly' })).toBe('+$0.00');
+  });
+
+  it('renders billedOnly with billing data (no overage)', () => {
+    expect(renderStatusBarText(baseData, 50, { ...baseConfig, statusBarTextMode: 'billedOnly' }, sampleBilling)).toBe('+$0.00');
+  });
+
+  it('renders billedOnly with overage billing data', () => {
+    expect(renderStatusBarText(baseData, 50, { ...baseConfig, statusBarTextMode: 'billedOnly' }, overageBilling)).toBe('+$1.20');
+  });
+});
+
+describe('renderStatusBarText (cost suffix)', () => {
+  it('does not append cost when showCostInStatusBar is false', () => {
+    // The cost suffix is applied in showData, not renderStatusBarText, so renderStatusBarText alone won't include it
+    expect(renderStatusBarText(baseData, 50, { ...baseConfig, statusBarTextMode: 'percent' }, sampleBilling)).toBe('50%');
+  });
+
+  it('billedOnly mode ignores cost suffix (applied externally)', () => {
+    expect(renderStatusBarText(baseData, 50, { ...baseConfig, statusBarTextMode: 'billedOnly' }, sampleBilling)).toBe('+$0.00');
   });
 });

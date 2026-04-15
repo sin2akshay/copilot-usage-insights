@@ -18,7 +18,7 @@ export const PLAN_LABELS: Record<string, string> = {
 };
 
 /** Text portion of the status bar display. */
-export type StatusBarTextMode = 'none' | 'count' | 'percent' | 'countPercent' | 'remaining';
+export type StatusBarTextMode = 'none' | 'count' | 'percent' | 'countPercent' | 'remaining' | 'billedOnly';
 
 /** Graphic/visual portion of the status bar display. */
 export type StatusBarGraphicMode = 'none' | 'segmented' | 'blocks' | 'thinBlocks' | 'dots' | 'circles' | 'braille' | 'rectangles';
@@ -67,6 +67,31 @@ export interface ExtensionConfig {
   statusBarGraphicMode: StatusBarGraphicMode;
   statusBarTextPosition: StatusBarTextPosition;
   segmentedBarWidth: number;
+  showBillingDetails: boolean;
+  showBillingRequestBreakdown: boolean;
+  showCostInStatusBar: boolean;
+}
+
+/** A single model's usage from the billing endpoint. */
+export interface BillingUsageItem {
+  model: string;
+  pricePerUnit: number;
+  grossQuantity: number;
+  grossAmount: number;
+  discountQuantity: number;
+  discountAmount: number;
+  netQuantity: number;
+  netAmount: number;
+}
+
+/** Billing data from the premium request usage endpoint. */
+export interface BillingData {
+  year: number;
+  month: number;
+  user: string;
+  items: BillingUsageItem[];
+  totalGross: number;
+  totalNet: number;
 }
 
 /** Detail view model passed to the webview panel. */
@@ -76,4 +101,5 @@ export interface DetailViewModel {
   isOffline: boolean;
   login: string | null;
   config: ExtensionConfig;
+  billing: BillingData | null;
 }

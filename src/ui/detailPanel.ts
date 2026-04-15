@@ -9,6 +9,7 @@ export interface DetailPanelHandlers {
   disconnect: () => void | Promise<void>;
   signIn: () => void | Promise<void>;
   openSettings: () => void | Promise<void>;
+  grantBillingAccess: () => void | Promise<void>;
   updateSetting: (key: string, value: unknown) => void | Promise<void>;
 }
 
@@ -58,6 +59,9 @@ export class DetailPanel implements vscode.Disposable {
           break;
         case 'openSettings':
           void this.handlers.openSettings();
+          break;
+        case 'grantBillingAccess':
+          void this.handlers.grantBillingAccess();
           break;
         case 'updateSetting':
           if (typeof message.key === 'string') {

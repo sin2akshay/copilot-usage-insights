@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import type { ExtensionConfig, UsageData } from '../core/models';
+import type { BillingData, ExtensionConfig, UsageData } from '../core/models';
 
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
@@ -45,7 +45,7 @@ export class StatusBar implements vscode.Disposable {
 
   showOffline(lastData: UsageData | null): void {
     if (lastData) {
-      this.showData(lastData, { refreshIntervalMinutes: 5, thresholdEnabled: false, thresholdWarning: 75, thresholdCritical: 90, statusBarTextMode: 'percent', statusBarGraphicMode: 'none', statusBarTextPosition: 'left', segmentedBarWidth: 8 }, null, true);
+      this.showData(lastData, { refreshIntervalMinutes: 5, thresholdEnabled: false, thresholdWarning: 75, thresholdCritical: 90, statusBarTextMode: 'percent', statusBarGraphicMode: 'none', statusBarTextPosition: 'left', segmentedBarWidth: 8, showBillingDetails: false, showCostInStatusBar: false }, null, true);
     } else {
       this.item.text = '$(alert)';
       this.item.tooltip = 'Copilot Usage: Offline';
@@ -61,13 +61,14 @@ export class StatusBar implements vscode.Disposable {
     lastUpdatedAt: Date | null,
     isOffline = false,
     isRateLimited = false,
+    billing: BillingData | null = null,
   ): void {
     const isStale = isOffline;
     const staleIcon = isStale ? ' $(warning)' : '';
 
     if (data.noData) {
       this.item.text = `\u2014${staleIcon}`;
-      this.item.tooltip = this.buildTooltip(data, lastUpdatedAt, isRateLimited, isStale);
+      this.item.tooltip = this.buildTooltip(data, lastUpdatedAt, isRateLimited, isStale, billing);
       this.item.command = 'copilotUsageInsights.openDetails';
       this.item.color = undefined;
       this.item.backgroundColor = undefined;
@@ -76,7 +77,7 @@ export class StatusBar implements vscode.Disposable {
 
     if (data.unlimited) {
       this.item.text = `\u221e${staleIcon}`;
-      this.item.tooltip = this.buildTooltip(data, lastUpdatedAt, isRateLimited, isStale);
+      this.item.tooltip = this.buildTooltip(data, lastUpdatedAt, isRateLimited, isStale, billing);
       this.item.command = 'copilotUsageInsights.openDetails';
       this.item.color = undefined;
       this.item.backgroundColor = undefined;
@@ -93,8 +94,14 @@ export class StatusBar implements vscode.Disposable {
       }
     }
 
-    this.item.text = `${renderStatusBarText(data, pct, config)}${staleIcon}`;
-    this.item.tooltip = this.buildTooltip(data, lastUpdatedAt, isRateLimited, isStale);
+    let text = renderStatusBarText(data, pct, config, billing);
+    // Cost suffix: append billed/net cost when showCostInStatusBar is enabled
+    if (config.showCostInStatusBar && billing && config.statusBarTextMode !== 'billedOnly') {
+      text += ` \u00b7 $${billing.totalNet.toFixed(2)}`;
+    }
+
+    this.item.text = `${text}${staleIcon}`;
+    this.item.tooltip = this.buildTooltip(data, lastUpdatedAt, isRateLimited, isStale, billing);
     this.item.command = 'copilotUsageInsights.openDetails';
     this.item.color = color;
     this.item.backgroundColor = undefined;
@@ -105,6 +112,7 @@ export class StatusBar implements vscode.Disposable {
     lastUpdatedAt: Date | null,
     isRateLimited: boolean,
     isStale: boolean,
+    billing: BillingData | null = null,
   ): vscode.MarkdownString {
     const md = new vscode.MarkdownString('', true);
     md.isTrusted = { enabledCommands: ['copilotUsageInsights.refresh', 'copilotUsageInsights.openDetails'] };
@@ -154,6 +162,25 @@ export class StatusBar implements vscode.Disposable {
       }
     }
 
+    // ── Requests by model (top 5)
+    if (billing && billing.items.length > 0) {
+      const sorted = [...billing.items].sort((a, b) => b.grossQuantity - a.grossQuantity);
+      const top5 = sorted.slice(0, 5);
+      md.appendMarkdown('---\n\n');
+      md.appendMarkdown('**Requests by model**\n\n');
+      md.appendMarkdown('| Model | Requests |\n|---|---:|\n');
+      for (const item of top5) {
+        const qty = item.grossQuantity % 1 === 0 ? String(item.grossQuantity) : item.grossQuantity.toFixed(1);
+        md.appendMarkdown(`| ${escapeMarkdown(item.model)} | ${qty} |\n`);
+      }
+      md.appendMarkdown('\n');
+
+      // ── Value / billed block (only when overage)
+      if (billing.totalNet > 0) {
+        md.appendMarkdown(`$(alert)&ensp;Billed: **+$${billing.totalNet.toFixed(2)}** &nbsp;·&nbsp; Gross: $${billing.totalGross.toFixed(2)}\n\n`);
+      }
+    }
+
     // ── Updated + actions
     if (lastUpdatedAt) {
       md.appendMarkdown(`$(clock)&ensp;${formatTimestamp(lastUpdatedAt)}`);
@@ -181,7 +208,7 @@ export function computeDisplayPct(data: UsageData): number {
   return data.usedPct;
 }
 
-export function renderStatusBarText(data: UsageData, pct: number, config: ExtensionConfig): string {
+export function renderStatusBarText(data: UsageData, pct: number, config: ExtensionConfig, billing: BillingData | null = null): string {
   const w = config.segmentedBarWidth;
   const remaining = Math.max(0, data.quota - data.used);
 
@@ -192,6 +219,7 @@ export function renderStatusBarText(data: UsageData, pct: number, config: Extens
     case 'percent':      textPart = `${pct}%`; break;
     case 'countPercent': textPart = `${data.used}/${data.quota} (${pct}%)`; break;
     case 'remaining':    textPart = `${remaining} left`; break;
+    case 'billedOnly':   textPart = `+$${billing ? billing.totalNet.toFixed(2) : '0.00'}`; break;
     case 'none': default: textPart = ''; break;
   }
 

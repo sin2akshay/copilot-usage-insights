@@ -11,7 +11,7 @@ export function getConfig(): ExtensionConfig {
   const warning = Number.isFinite(Number(rawWarning)) ? Number(rawWarning) : 75;
   const critical = Number.isFinite(Number(rawCritical)) ? Number(rawCritical) : 90;
 
-  const validTextModes = ['none', 'count', 'percent', 'countPercent', 'remaining'];
+  const validTextModes = ['none', 'count', 'percent', 'countPercent', 'remaining', 'billedOnly'];
   const validGraphicModes = ['none', 'segmented', 'blocks', 'thinBlocks', 'dots', 'circles', 'braille', 'rectangles'];
   const validTextPositions = ['left', 'right'];
 
@@ -37,5 +37,8 @@ export function getConfig(): ExtensionConfig {
     statusBarGraphicMode: graphicMode,
     statusBarTextPosition: textPosition,
     segmentedBarWidth: Math.max(4, Math.min(16, cfg.get<number>('segmentedBarWidth', 8))),
+    showBillingDetails: cfg.get<boolean>('showBillingDetails', false),
+    showBillingRequestBreakdown: cfg.get<boolean>('showBillingRequestBreakdown', true),
+    showCostInStatusBar: cfg.get<boolean>('showCostInStatusBar', false),
   };
 }

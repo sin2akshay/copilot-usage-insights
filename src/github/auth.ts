@@ -2,8 +2,10 @@ import * as vscode from 'vscode';
 
 const GITHUB_PROVIDER = 'github';
 const SCOPES = ['user:email', 'read:user'];
+const BILLING_SCOPES = ['user:email', 'read:user', 'user'];
 const DISCONNECTED_KEY = 'copilotUsage.disconnected';
 const LOGIN_KEY = 'copilotUsage.login';
+const BILLING_SCOPE_GRANTED_KEY = 'copilotUsage.billingScopeGranted';
 
 /**
  * Get a GitHub session access token via VS Code's built-in authentication.
@@ -40,6 +42,47 @@ export async function getSession(
 export async function disconnect(globalState: vscode.Memento): Promise<void> {
   await globalState.update(DISCONNECTED_KEY, true);
   await globalState.update(LOGIN_KEY, undefined);
+  await globalState.update(BILLING_SCOPE_GRANTED_KEY, undefined);
+}
+
+/**
+ * Get a GitHub session with the elevated `user` scope needed for billing endpoints.
+ * Only prompts interactively on first use; caches whether scope was granted.
+ */
+export async function getBillingSession(
+  globalState: vscode.Memento,
+  interactive: boolean,
+): Promise<vscode.AuthenticationSession | undefined> {
+  if (isDisconnected(globalState) && !interactive) {
+    return undefined;
+  }
+
+  // If we already know the scope was denied, don't keep asking
+  const cached = globalState.get<boolean>(BILLING_SCOPE_GRANTED_KEY);
+  if (cached === false && !interactive) {
+    return undefined;
+  }
+
+  try {
+    const session = await vscode.authentication.getSession(GITHUB_PROVIDER, BILLING_SCOPES, {
+      silent: !interactive,
+      createIfNone: interactive,
+    });
+
+    if (session) {
+      await globalState.update(BILLING_SCOPE_GRANTED_KEY, true);
+    }
+    return session;
+  } catch {
+    // User cancelled or scope not available
+    await globalState.update(BILLING_SCOPE_GRANTED_KEY, false);
+    return undefined;
+  }
+}
+
+/** Check whether the billing scope has been granted. */
+export function isBillingScopeGranted(globalState: vscode.Memento): boolean {
+  return globalState.get<boolean>(BILLING_SCOPE_GRANTED_KEY, false);
 }
 
 /** Check if the user has opted out. */

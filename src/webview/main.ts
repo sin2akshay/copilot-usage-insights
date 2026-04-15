@@ -42,6 +42,28 @@ interface ConfigSerialized {
   statusBarGraphicMode: string;
   statusBarTextPosition: string;
   segmentedBarWidth: number;
+  showBillingDetails: boolean;
+  showCostInStatusBar: boolean;
+}
+
+interface BillingUsageItemSerialized {
+  model: string;
+  pricePerUnit: number;
+  grossQuantity: number;
+  grossAmount: number;
+  discountQuantity: number;
+  discountAmount: number;
+  netQuantity: number;
+  netAmount: number;
+}
+
+interface BillingDataSerialized {
+  year: number;
+  month: number;
+  user: string;
+  items: BillingUsageItemSerialized[];
+  totalGross: number;
+  totalNet: number;
 }
 
 interface DetailViewModelSerialized {
@@ -50,6 +72,7 @@ interface DetailViewModelSerialized {
   isOffline: boolean;
   login: string | null;
   config: ConfigSerialized;
+  billing: BillingDataSerialized | null;
 }
 
 const vscode = acquireVsCodeApi();
@@ -64,6 +87,7 @@ const STATUS_BAR_TEXT_MODES = [
   { value: 'percent',      label: 'Percentage',  desc: '50%' },
   { value: 'countPercent', label: 'Count + %',   desc: '150/300 (50%)' },
   { value: 'remaining',    label: 'Remaining',   desc: '150 left' },
+  { value: 'billedOnly',   label: 'Billed Only', desc: '+$0.00' },
 ];
 
 const STATUS_BAR_GRAPHIC_MODES = [
@@ -246,6 +270,8 @@ function render(model: DetailViewModelSerialized): void {
         </div>
       </section>
 
+      ${renderBillingSection(model.billing, config)}
+
       <section class="card">
         <h2 class="card-title">Status Bar Settings</h2>
         <div class="settings-grid">
@@ -311,6 +337,30 @@ function render(model: DetailViewModelSerialized): void {
             </div>
           </div>
         </div>
+        <div class="settings-divider"></div>
+        <div class="settings-grid">
+          <div class="setting-row">
+            <label for="setting-billing">Billing Details</label>
+            <label class="toggle">
+              <input type="checkbox" id="setting-billing" data-setting="showBillingDetails" ${config.showBillingDetails ? 'checked' : ''} />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+          <div class="setting-row ${!config.showBillingDetails ? 'disabled' : ''}">
+            <label for="setting-billing-models">Show Requests by Model</label>
+            <label class="toggle">
+              <input type="checkbox" id="setting-billing-models" data-setting="showBillingRequestBreakdown" ${config.showBillingRequestBreakdown ? 'checked' : ''} ${!config.showBillingDetails ? 'disabled' : ''} />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+          <div class="setting-row ${!config.showBillingDetails ? 'disabled' : ''}">
+            <label for="setting-cost-statusbar">Show Billed Cost in Status Bar</label>
+            <label class="toggle">
+              <input type="checkbox" id="setting-cost-statusbar" data-setting="showCostInStatusBar" ${config.showCostInStatusBar ? 'checked' : ''} ${!config.showBillingDetails ? 'disabled' : ''} />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </div>
       </section>
 
       <footer class="footer">
@@ -370,7 +420,7 @@ function renderQuotaCard(title: string, quota: QuotaSnapshotSerialized | null, i
           <h3 class="quota-title">${esc(title)}</h3>
         </div>
         <span class="quota-value">∞</span>
-        <div class="quota-bar"><div class="quota-bar-fill unlimited" style="width: 100%"></div></div>
+        ${renderQuotaBar(1, true)}
         <span class="quota-sub muted">Unlimited</span>
       </div>
     `;
@@ -385,9 +435,158 @@ function renderQuotaCard(title: string, quota: QuotaSnapshotSerialized | null, i
         <h3 class="quota-title">${esc(title)}</h3>
       </div>
       <span class="quota-value mono">${used} <span class="muted">/ ${quota.entitlement}</span></span>
-      <div class="quota-bar"><div class="quota-bar-fill" style="width: ${Math.min(pctUsed, 100)}%"></div></div>
+      ${renderQuotaBar(Math.min(pctUsed, 100) / 100, false)}
       <span class="quota-sub muted">${quota.remaining} remaining · ${pctUsed}% used</span>
     </div>
+  `;
+}
+
+function renderQuotaBar(ratio: number, unlimited: boolean): string {
+  const trackWidth = 220;
+  const fillWidth = Math.round(trackWidth * Math.max(0, Math.min(1, ratio)));
+  const fillClass = unlimited ? 'quota-bar-fill unlimited' : 'quota-bar-fill';
+
+  return `
+    <svg class="quota-bar" viewBox="0 0 ${trackWidth} 6" aria-hidden="true" preserveAspectRatio="none">
+      <rect class="quota-bar-track" x="0" y="0" width="${trackWidth}" height="6" rx="3" ry="3"></rect>
+      <rect class="${fillClass}" x="0" y="0" width="${fillWidth}" height="6" rx="3" ry="3"></rect>
+    </svg>
+  `;
+}
+
+function renderBillingSection(billing: BillingDataSerialized | null, config: ConfigSerialized): string {
+  if (!config.showBillingDetails) {
+    return '';
+  }
+
+  // No billing data — show grant access message
+  if (!billing) {
+    return `
+      <section class="card billing-card">
+        <h2 class="card-title">Billing Details</h2>
+        <div class="billing-grant-access">
+          <p class="muted">Billing details require the <code>user</code> scope. Grant access to see per-model request breakdowns and cost details.</p>
+          <button class="btn btn-primary btn-sm" data-action="grantBillingAccess">Grant Access</button>
+        </div>
+      </section>
+    `;
+  }
+
+  const totalRequests = billing.items.reduce((sum, i) => sum + i.grossQuantity, 0);
+  const sorted = [...billing.items].sort((a, b) => b.grossQuantity - a.grossQuantity);
+  const maxQty = sorted.length > 0 ? sorted[0].grossQuantity : 1;
+
+  // Overage banner
+  const overageBanner = billing.totalNet > 0
+    ? `<div class="overage-banner">
+        <span class="overage-icon">$(warning)</span>
+        <span>Overage: <strong>+$${billing.totalNet.toFixed(2)}</strong> billed &nbsp;·&nbsp; ${totalRequests > 0 ? `${Math.round((billing.totalNet / billing.totalGross) * 100)}% of gross` : ''}</span>
+      </div>`
+    : '';
+
+  // Summary stats
+  const pricePerUnit = billing.items.length > 0 ? billing.items[0].pricePerUnit : 0;
+  const summaryHtml = `
+    <div class="billing-summary">
+      <div class="billing-stat">
+        <span class="billing-stat-value mono">${formatQuantity(totalRequests)}</span>
+        <span class="billing-stat-label">Total Requests</span>
+      </div>
+      <div class="billing-stat">
+        <span class="billing-stat-value mono">$${billing.totalGross.toFixed(2)}</span>
+        <span class="billing-stat-label">Gross Cost</span>
+      </div>
+      <div class="billing-stat">
+        <span class="billing-stat-value mono${billing.totalNet > 0 ? ' crit-text' : ''}">$${billing.totalNet.toFixed(2)}</span>
+        <span class="billing-stat-label">Billed / Overage</span>
+      </div>
+      <div class="billing-stat">
+        <span class="billing-stat-value mono">$${pricePerUnit.toFixed(2)}</span>
+        <span class="billing-stat-label">Price / Unit</span>
+      </div>
+    </div>
+  `;
+
+  // Model breakup table
+  const top5 = sorted.slice(0, 5);
+  const rest = sorted.slice(5);
+
+  const top5Rows = top5.map((item, i) => `
+    <tr class="${i % 2 === 1 ? 'alt-row' : ''}">
+      <td>
+        <div class="model-name">${esc(item.model)}</div>
+        ${renderModelBar(item.grossQuantity, maxQty)}
+      </td>
+      <td class="mono right">${formatQuantity(item.grossQuantity)}</td>
+      <td class="mono right">$${item.grossAmount.toFixed(2)}</td>
+      <td class="mono right">$${item.netAmount.toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  const restRows = rest.map((item, i) => `
+    <tr class="${(i + top5.length) % 2 === 1 ? 'alt-row' : ''}">
+      <td>
+        <div class="model-name">${esc(item.model)}</div>
+        ${renderModelBar(item.grossQuantity, maxQty)}
+      </td>
+      <td class="mono right">${formatQuantity(item.grossQuantity)}</td>
+      <td class="mono right">$${item.grossAmount.toFixed(2)}</td>
+      <td class="mono right">$${item.netAmount.toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  const tableHtml = config.showBillingRequestBreakdown ? `
+    <div class="billing-table-section">
+      <div class="billing-table-header" data-toggle="billing-model-table">
+        <span class="chevron">▶</span>
+        <h3 class="billing-table-title">Requests by Model</h3>
+        <span class="muted">${billing.items.length} models</span>
+      </div>
+      <div class="billing-table-content" id="billing-model-table">
+        <table class="billing-table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th class="right">Requests</th>
+              <th class="right">Gross ($)</th>
+              <th class="right">Billed ($)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${top5Rows}
+            ${rest.length > 0 ? restRows : ''}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  ` : `
+    <div class="billing-summary-note muted">Requests by Model is disabled. Enable it in settings to view the model breakdown.</div>
+  `;
+
+  return `
+    <section class="card billing-card">
+      <h2 class="card-title">Billing Details</h2>
+      ${overageBanner}
+      ${summaryHtml}
+      ${tableHtml}
+    </section>
+  `;
+}
+
+function formatQuantity(qty: number): string {
+  return qty % 1 === 0 ? String(qty) : qty.toFixed(1);
+}
+
+function renderModelBar(quantity: number, maxQuantity: number): string {
+  const trackWidth = 180;
+  const ratio = maxQuantity > 0 ? Math.max(0, Math.min(1, quantity / maxQuantity)) : 0;
+  const fillWidth = Math.round(trackWidth * ratio);
+
+  return `
+    <svg class="model-bar" viewBox="0 0 ${trackWidth} 4" aria-hidden="true" preserveAspectRatio="none">
+      <rect class="model-bar-track" x="0" y="0" width="${trackWidth}" height="4" rx="2" ry="2"></rect>
+      <rect class="model-bar-fill" x="0" y="0" width="${fillWidth}" height="4" rx="2" ry="2"></rect>
+    </svg>
   `;
 }
 
@@ -427,6 +626,18 @@ function bindSettings(): void {
         btn.classList.add('active');
         vscode.postMessage({ type: 'updateSetting', key: group.dataset.setting, value: btn.dataset.value });
       });
+    });
+  });
+  // Collapsible billing table toggle
+  root.querySelectorAll<HTMLElement>('.billing-table-header[data-toggle]').forEach(header => {
+    header.addEventListener('click', () => {
+      const targetId = header.dataset.toggle;
+      if (!targetId) { return; }
+      const content = document.getElementById(targetId);
+      if (!content) { return; }
+      const isExpanded = content.classList.toggle('expanded');
+      const chevron = header.querySelector('.chevron');
+      if (chevron) { chevron.textContent = isExpanded ? '▼' : '▶'; }
     });
   });
 }

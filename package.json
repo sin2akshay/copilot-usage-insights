@@ -2,7 +2,7 @@
   "name": "copilot-premium-request-tracker",
   "displayName": "Copilot Usage Insights",
   "description": "See your GitHub Copilot premium request usage directly in the VS Code status bar.",
-  "version": "0.4.5",
+  "version": "1.2.0",
   "publisher": "sin2akshay",
   "license": "MIT",
   "pricing": "Free",
@@ -101,14 +101,16 @@
             "count",
             "percent",
             "countPercent",
-            "remaining"
+            "remaining",
+            "billedOnly"
           ],
           "enumDescriptions": [
             "No text — show only the graphic visualization",
             "150/300 — used / quota",
             "50% — percentage used",
             "150/300 (50%) — used, quota, and percentage",
-            "150 left — remaining requests"
+            "150 left — remaining requests",
+            "+$0.00 — show only the billed overage amount"
           ],
           "default": "percent",
           "markdownDescription": "Text portion of the status bar display. Set to `none` to show only the graphic."
@@ -157,6 +159,21 @@
           "minimum": 4,
           "maximum": 16,
           "markdownDescription": "Number of segments in bar-style graphic modes (segmented, blocks, dots, circles)."
+        },
+        "copilotUsageInsights.showBillingDetails": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Enable billing-powered per-model request details in the dashboard and tooltip. Requires a one-time `user` scope upgrade when first enabled."
+        },
+        "copilotUsageInsights.showCostInStatusBar": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Append the billed cost / net amount (e.g. `· $1.20`) to the status bar text when billing details are available."
+        },
+        "copilotUsageInsights.showBillingRequestBreakdown": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the Requests by Model breakdown when billing details are enabled. Disable to hide the model-level table while keeping billing summary data visible."
         }
       }
     },

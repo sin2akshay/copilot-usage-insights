@@ -1,4 +1,4 @@
-import type { ApiErrorCode, QuotaSnapshot, UsageData } from '../core/models';
+import type { ApiErrorCode, BillingData, BillingUsageItem, QuotaSnapshot, UsageData } from '../core/models';
 import { PLAN_LABELS } from '../core/models';
 
 const COPILOT_INTERNAL_USER_URL = 'https://api.github.com/copilot_internal/user';
@@ -164,4 +164,88 @@ function getNextMonthReset(): Date {
 function parseDateOrFallback(raw: string): Date {
   const d = new Date(raw);
   return isNaN(d.getTime()) ? getNextMonthReset() : d;
+}
+
+const BILLING_BASE_URL = 'https://api.github.com/users';
+const LOGIN_PATTERN = /^[a-zA-Z0-9-]+$/;
+
+/**
+ * Fetch per-model billing usage for the current billing period.
+ */
+export async function fetchBillingUsage(token: string, login: string): Promise<BillingData> {
+  if (!LOGIN_PATTERN.test(login)) {
+    throw new ApiError('API_ERROR', 'Invalid login for billing endpoint');
+  }
+
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
+  const url = `${BILLING_BASE_URL}/${login}/settings/billing/premium_request/usage?year=${year}&month=${month}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        'User-Agent': 'copilot-premium-request-tracker',
+      },
+    });
+  } catch (e: unknown) {
+    clearTimeout(timeout);
+    const isTimeout = e instanceof Error && e.name === 'AbortError';
+    throw new ApiError(
+      isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
+      isTimeout ? 'Billing request timed out' : 'Billing network error',
+    );
+  }
+  clearTimeout(timeout);
+
+  if (res.status === 401) { throw new ApiError('AUTH', 'Billing: Not signed in (401)'); }
+  if (res.status === 403) { throw new ApiError('FORBIDDEN', 'Billing: Forbidden (403) — user scope may be required'); }
+  if (res.status === 429) { throw new ApiError('RATE_LIMIT', 'Billing: Rate limited'); }
+  if (!res.ok) {
+    throw new ApiError(
+      res.status >= 500 ? 'SERVER_ERROR' : 'API_ERROR',
+      `Billing API error: ${res.status}`,
+    );
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    throw new ApiError('API_ERROR', 'Invalid JSON from billing API');
+  }
+
+  const timePeriod = data.timePeriod as Record<string, unknown> | undefined;
+  const user = (data.user as string) ?? login;
+  const rawItems = data.usageItems as Array<Record<string, unknown>> | undefined;
+
+  const items: BillingUsageItem[] = (rawItems ?? []).map(item => ({
+    model: (item.model as string) ?? 'Unknown',
+    pricePerUnit: Number(item.pricePerUnit) || 0,
+    grossQuantity: Number(item.grossQuantity) || 0,
+    grossAmount: Number(item.grossAmount) || 0,
+    discountQuantity: Number(item.discountQuantity) || 0,
+    discountAmount: Number(item.discountAmount) || 0,
+    netQuantity: Number(item.netQuantity) || 0,
+    netAmount: Number(item.netAmount) || 0,
+  }));
+
+  const totalGross = items.reduce((sum, i) => sum + i.grossAmount, 0);
+  const totalNet = items.reduce((sum, i) => sum + i.netAmount, 0);
+
+  return {
+    year: Number(timePeriod?.year) || year,
+    month: Number(timePeriod?.month) || month,
+    user,
+    items,
+    totalGross,
+    totalNet,
+  };
 }

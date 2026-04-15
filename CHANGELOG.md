@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.2.0
+
+- Added separate dashboard toggles for **Billing Details** and **Requests by Model**.
+  - `Billing Details` controls whether billing data is fetched and shown at all.
+  - `Requests by Model` controls whether the model-level request breakdown table is displayed while billing details remain enabled.
+- Improved settings UX so users can keep billing summary data visible without displaying the full model table.
+
+## 1.1.0
+
+- Fixed the **Show Cost in Status Bar** toggle so it now shows billed/net cost (`totalNet`) instead of gross cost.
+- Updated the status bar and dashboard copy to clearly label this as billed cost.
+- Switched the premium quota bar and billing model bars to consistent geometry-based rendering, matching the same ratio-driven logic used by the circular gauge.
+
+## 1.0.0
+
+- **Billing Details** — new opt-in feature powered by the official GitHub billing endpoint (`GET /users/{login}/settings/billing/premium_request/usage`).
+  - Enable via the new **Billing Details** toggle in the dashboard settings section.
+  - Shows a **billing summary card** with total requests, gross cost, billed/overage amount, and price per unit.
+  - **Per-model request breakdown** — collapsible table sorted by request count with color-coded bars proportional to each model's share. Top 5 models shown immediately; expand to see all.
+  - **Overage banner** — prominent red callout when `totalNet > 0`, with billed amount as the primary signal.
+  - **Grant Access flow** — when the `user` OAuth scope is not yet granted, the dashboard shows an explanatory message with a "Grant Access" button. Scope status is cached in global state to avoid re-prompting.
+- **Cost in status bar** — new `showCostInStatusBar` toggle appends gross cost (e.g. `· $4.31`) to any active text mode when billing data is available.
+- **`billedOnly` status bar mode** — new text mode that shows the net billed overage amount (`+$X.XX`). Defaults to `+$0.00` when no overage.
+- **Top-5 Models in tooltip** — when billing is enabled, the hover tooltip shows a compact `Requests by model` table (top 5, sorted by request count). The value/billed block appears only when overage is active.
+- Billing fetch is fully **non-blocking** — failure never affects the main usage data flow; `billing` is set to `null` and the UI degrades gracefully.
+- Bumped minimum VS Code engine requirement remains `^1.100.0`.
+
 ## 0.4.5
 
 - Added two new graphic display modes for the status bar:

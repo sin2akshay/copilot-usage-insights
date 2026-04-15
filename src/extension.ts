@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 
 import { getConfig } from './core/config';
-import type { DetailViewModel, UsageData } from './core/models';
+import type { BillingData, DetailViewModel, UsageData } from './core/models';
 import * as auth from './github/auth';
-import { fetchUsage } from './github/usageReports';
+import { fetchBillingUsage, fetchUsage } from './github/usageReports';
 import { DetailPanel } from './ui/detailPanel';
 import { StatusBar } from './ui/statusBar';
 
@@ -16,6 +16,7 @@ let output: vscode.LogOutputChannel;
 let globalState: vscode.Memento;
 
 let lastData: UsageData | null = null;
+let lastBillingData: BillingData | null = null;
 let lastUpdatedAt: Date | null = null;
 let refreshInFlight = false;
 let pendingSignIn = false;
@@ -35,6 +36,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     disconnect: () => doDisconnect(),
     signIn: () => refresh(true, true),
     openSettings: () => void vscode.commands.executeCommand('workbench.action.openSettings', CONFIG_SECTION),
+    grantBillingAccess: async () => {
+      const session = await auth.getBillingSession(globalState, true);
+      if (session) {
+        void refresh(false, true);
+      }
+    },
     updateSetting: (key: string, value: unknown) => {
       const allowedKeys = [
         'refreshIntervalMinutes',
@@ -45,6 +52,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         'statusBarGraphicMode',
         'statusBarTextPosition',
         'segmentedBarWidth',
+        'showBillingDetails',
+        'showBillingRequestBreakdown',
+        'showCostInStatusBar',
       ];
       if (!allowedKeys.includes(key)) { return; }
       const cfg = vscode.workspace.getConfiguration(CONFIG_SECTION);
@@ -120,6 +130,25 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
     // Persist login
     await globalState.update('copilotUsage.login', session.account.label);
 
+    // Billing fetch (non-blocking)
+    const config = getConfig();
+    if (config.showBillingDetails) {
+      try {
+        const billingSession = await auth.getBillingSession(globalState, doSignIn);
+        if (billingSession) {
+          lastBillingData = await fetchBillingUsage(billingSession.accessToken, session.account.label);
+        } else {
+          lastBillingData = null;
+        }
+      } catch (billingErr: unknown) {
+        const billingMsg = (billingErr as { message?: string })?.message ?? 'Unknown billing error';
+        output.warn(`Billing fetch failed (non-blocking): ${billingMsg}`);
+        lastBillingData = null;
+      }
+    } else {
+      lastBillingData = null;
+    }
+
     output.info(`Usage fetched: plan=${data.plan} used=${data.used}/${data.quota} (${data.usedPct}%)`);
     updateStatusBar(data);
     detailPanel.update(getDetailViewModel());
@@ -164,12 +193,13 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
 }
 
 function updateStatusBar(data: UsageData): void {
-  statusBar.showData(data, getConfig(), lastUpdatedAt, isOffline);
+  statusBar.showData(data, getConfig(), lastUpdatedAt, isOffline, false, lastBillingData);
 }
 
 async function doDisconnect(): Promise<void> {
   await auth.disconnect(globalState);
   lastData = null;
+  lastBillingData = null;
   lastUpdatedAt = null;
   statusBar.showSignIn();
   detailPanel.update(getDetailViewModel());
@@ -183,6 +213,7 @@ function getDetailViewModel(): DetailViewModel {
     isOffline,
     login: auth.getLogin(globalState) ?? null,
     config: getConfig(),
+    billing: lastBillingData,
   };
 }
 

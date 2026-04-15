@@ -212,20 +212,20 @@ body {
 }
 .quota-value { font-size: 1.35em; font-weight: 700; line-height: 1.2; }
 .quota-bar {
+  display: block;
+  width: 100%;
   height: 6px;
-  background: var(--input-bg, color-mix(in srgb, var(--fg) 10%, var(--bg)));
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  overflow: hidden;
+}
+.quota-bar-track {
+  fill: var(--input-bg, color-mix(in srgb, var(--fg) 10%, var(--bg)));
+  stroke: var(--border);
+  stroke-width: 1;
 }
 .quota-bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-  min-width: 0;
+  fill: var(--accent);
 }
 .quota-bar-fill.unlimited {
-  background: linear-gradient(90deg, var(--ok), color-mix(in srgb, var(--ok) 50%, transparent));
+  fill: var(--ok);
 }
 .quota-sub { font-size: 0.72em; }
 
@@ -395,6 +395,144 @@ a:hover { text-decoration: underline; }
 .sign-in-icon { opacity: 0.25; }
 .sign-in-title { font-size: 1.4em; font-weight: 600; }
 
+/* ── Billing card ── */
+.billing-card { gap: 16px; }
+
+.overage-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--crit) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--crit) 25%, transparent);
+  color: var(--crit);
+  font-size: 0.88em;
+  font-weight: 500;
+}
+
+.billing-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.billing-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--fg) 3%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.billing-stat-value { font-size: 1.1em; font-weight: 700; line-height: 1.2; }
+.billing-stat-label {
+  font-size: 0.7em;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.crit-text { color: var(--crit); }
+
+/* ── Billing table section (collapsible) ── */
+.billing-table-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.billing-table-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--fg) 3%, transparent);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.billing-table-header:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.chevron {
+  font-size: 0.7em;
+  color: var(--muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.billing-table-title {
+  font-size: 0.82em;
+  font-weight: 600;
+  flex: 1;
+}
+
+.billing-table-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.billing-table-content.expanded {
+  max-height: 600px;
+}
+
+.billing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85em;
+}
+
+.billing-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.billing-table th.right,
+.billing-table td.right { text-align: right; }
+
+.billing-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.billing-table tr.alt-row td {
+  background: color-mix(in srgb, var(--fg) 2%, transparent);
+}
+
+.model-name { font-weight: 500; margin-bottom: 3px; }
+
+.model-bar {
+  display: block;
+  width: 180px;
+  height: 4px;
+}
+.model-bar-track { fill: color-mix(in srgb, var(--fg) 8%, transparent); }
+.model-bar-fill { fill: var(--accent); }
+
+/* ── Grant access info box ── */
+.billing-grant-access {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  text-align: center;
+}
+.billing-grant-access code {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  font-size: 0.9em;
+}
+
 /* ── Responsive ── */
 @media (max-width: 700px) {
   .hero {
@@ -413,4 +551,5 @@ a:hover { text-decoration: underline; }
   }
   select { min-width: 100%; width: 100%; }
   .dashboard { padding: 16px; }
+  .billing-summary { grid-template-columns: repeat(2, 1fr); }
 }
