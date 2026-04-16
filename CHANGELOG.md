@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.4.0
+
+- Redesigned the status bar hover tooltip using a cleaner Layout-5-style monospace summary block instead of the previous Markdown table.
+- Improved tooltip hierarchy and readability:
+  - compact aligned summary rows
+  - preserved pacing detail
+  - cleaner top-model section
+  - billed/value block only when overage is active
+- Decoupled `Requests by Model` from `Billing Details` behavior.
+  - Per-model request data is now fetched whenever any billing-powered feature needs it, even if the billing summary toggle is off.
+  - `Requests by Model` can now be used independently while still under quota and with billed overage at `$0.00`.
+- Split the dashboard into separate `Billing Details` and `Requests by Model` sections for clearer control and better information hierarchy.
+
 ## 1.2.0
 
 - Added separate dashboard toggles for **Billing Details** and **Requests by Model**.

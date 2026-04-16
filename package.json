@@ -2,7 +2,7 @@
   "name": "copilot-premium-request-tracker",
   "displayName": "Copilot Usage Insights",
   "description": "See your GitHub Copilot premium request usage directly in the VS Code status bar.",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "publisher": "sin2akshay",
   "license": "MIT",
   "pricing": "Free",
@@ -21,11 +21,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/sin2akshay/copilot-premium-request-tracker.git"
+    "url": "https://github.com/sin2akshay/copilot-usage-insights.git"
   },
-  "homepage": "https://github.com/sin2akshay/copilot-premium-request-tracker#readme",
+  "homepage": "https://github.com/sin2akshay/copilot-usage-insights#readme",
   "bugs": {
-    "url": "https://github.com/sin2akshay/copilot-premium-request-tracker/issues"
+    "url": "https://github.com/sin2akshay/copilot-usage-insights/issues"
   },
   "keywords": [
     "copilot",
@@ -163,7 +163,7 @@
         "copilotUsageInsights.showBillingDetails": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Enable billing-powered per-model request details in the dashboard and tooltip. Requires a one-time `user` scope upgrade when first enabled."
+          "markdownDescription": "Enable the billing summary and overage details in the dashboard. Requires a one-time `user` scope upgrade when first enabled."
         },
         "copilotUsageInsights.showCostInStatusBar": {
           "type": "boolean",
@@ -173,7 +173,7 @@
         "copilotUsageInsights.showBillingRequestBreakdown": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show the Requests by Model breakdown when billing details are enabled. Disable to hide the model-level table while keeping billing summary data visible."
+          "markdownDescription": "Show the Requests by Model breakdown from the billing usage endpoint, even when billed overage is still $0.00. Disable to hide the model-level table while keeping other billing features available."
         }
       }
     },

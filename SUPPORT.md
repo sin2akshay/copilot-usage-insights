@@ -4,7 +4,7 @@
 
 Use the GitHub issue tracker for bugs, regressions, and feature requests:
 
-https://github.com/sin2akshay/copilot-premium-request-tracker/issues
+https://github.com/sin2akshay/copilot-usage-insights/issues
 
 ## When Filing A Bug
 

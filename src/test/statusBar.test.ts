@@ -4,6 +4,7 @@ vi.mock('vscode', () => ({
   MarkdownString: class MarkdownString {
     value = '';
     isTrusted: unknown;
+    supportHtml = false;
 
     appendMarkdown(markdown: string): void {
       this.value += markdown;
@@ -57,6 +58,7 @@ const baseConfig: ExtensionConfig = {
   statusBarTextPosition: 'left',
   segmentedBarWidth: 8,
   showBillingDetails: false,
+  showBillingRequestBreakdown: true,
   showCostInStatusBar: false,
 };
 

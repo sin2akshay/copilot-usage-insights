@@ -43,6 +43,7 @@ interface ConfigSerialized {
   statusBarTextPosition: string;
   segmentedBarWidth: number;
   showBillingDetails: boolean;
+  showBillingRequestBreakdown: boolean;
   showCostInStatusBar: boolean;
 }
 
@@ -271,6 +272,7 @@ function render(model: DetailViewModelSerialized): void {
       </section>
 
       ${renderBillingSection(model.billing, config)}
+      ${renderRequestBreakdownSection(model.billing, config)}
 
       <section class="card">
         <h2 class="card-title">Status Bar Settings</h2>
@@ -346,17 +348,17 @@ function render(model: DetailViewModelSerialized): void {
               <span class="toggle-track"></span>
             </label>
           </div>
-          <div class="setting-row ${!config.showBillingDetails ? 'disabled' : ''}">
+          <div class="setting-row">
             <label for="setting-billing-models">Show Requests by Model</label>
             <label class="toggle">
-              <input type="checkbox" id="setting-billing-models" data-setting="showBillingRequestBreakdown" ${config.showBillingRequestBreakdown ? 'checked' : ''} ${!config.showBillingDetails ? 'disabled' : ''} />
+              <input type="checkbox" id="setting-billing-models" data-setting="showBillingRequestBreakdown" ${config.showBillingRequestBreakdown ? 'checked' : ''} />
               <span class="toggle-track"></span>
             </label>
           </div>
-          <div class="setting-row ${!config.showBillingDetails ? 'disabled' : ''}">
+          <div class="setting-row">
             <label for="setting-cost-statusbar">Show Billed Cost in Status Bar</label>
             <label class="toggle">
-              <input type="checkbox" id="setting-cost-statusbar" data-setting="showCostInStatusBar" ${config.showCostInStatusBar ? 'checked' : ''} ${!config.showBillingDetails ? 'disabled' : ''} />
+              <input type="checkbox" id="setting-cost-statusbar" data-setting="showCostInStatusBar" ${config.showCostInStatusBar ? 'checked' : ''} />
               <span class="toggle-track"></span>
             </label>
           </div>
@@ -465,7 +467,7 @@ function renderBillingSection(billing: BillingDataSerialized | null, config: Con
       <section class="card billing-card">
         <h2 class="card-title">Billing Details</h2>
         <div class="billing-grant-access">
-          <p class="muted">Billing details require the <code>user</code> scope. Grant access to see per-model request breakdowns and cost details.</p>
+          <p class="muted">Billing details require the <code>user</code> scope. Grant access to see billing summary and overage details.</p>
           <button class="btn btn-primary btn-sm" data-action="grantBillingAccess">Grant Access</button>
         </div>
       </section>
@@ -473,8 +475,6 @@ function renderBillingSection(billing: BillingDataSerialized | null, config: Con
   }
 
   const totalRequests = billing.items.reduce((sum, i) => sum + i.grossQuantity, 0);
-  const sorted = [...billing.items].sort((a, b) => b.grossQuantity - a.grossQuantity);
-  const maxQty = sorted.length > 0 ? sorted[0].grossQuantity : 1;
 
   // Overage banner
   const overageBanner = billing.totalNet > 0
@@ -507,7 +507,35 @@ function renderBillingSection(billing: BillingDataSerialized | null, config: Con
     </div>
   `;
 
-  // Model breakup table
+  return `
+    <section class="card billing-card">
+      <h2 class="card-title">Billing Details</h2>
+      ${overageBanner}
+      ${summaryHtml}
+    </section>
+  `;
+}
+
+function renderRequestBreakdownSection(billing: BillingDataSerialized | null, config: ConfigSerialized): string {
+  if (!config.showBillingRequestBreakdown) {
+    return '';
+  }
+
+  if (!billing) {
+    return `
+      <section class="card billing-card">
+        <h2 class="card-title">Requests by Model</h2>
+        <div class="billing-grant-access">
+          <p class="muted">Requests by Model uses the same GitHub billing usage endpoint. Grant access to view per-model request counts even when billed overage is still $0.00.</p>
+          <button class="btn btn-primary btn-sm" data-action="grantBillingAccess">Grant Access</button>
+        </div>
+      </section>
+    `;
+  }
+
+  const sorted = [...billing.items].sort((a, b) => b.grossQuantity - a.grossQuantity);
+  const maxQty = sorted.length > 0 ? sorted[0].grossQuantity : 1;
+
   const top5 = sorted.slice(0, 5);
   const rest = sorted.slice(5);
 
@@ -535,7 +563,7 @@ function renderBillingSection(billing: BillingDataSerialized | null, config: Con
     </tr>
   `).join('');
 
-  const tableHtml = config.showBillingRequestBreakdown ? `
+  const tableHtml = `
     <div class="billing-table-section">
       <div class="billing-table-header" data-toggle="billing-model-table">
         <span class="chevron">▶</span>
@@ -559,15 +587,11 @@ function renderBillingSection(billing: BillingDataSerialized | null, config: Con
         </table>
       </div>
     </div>
-  ` : `
-    <div class="billing-summary-note muted">Requests by Model is disabled. Enable it in settings to view the model breakdown.</div>
   `;
 
   return `
     <section class="card billing-card">
-      <h2 class="card-title">Billing Details</h2>
-      ${overageBanner}
-      ${summaryHtml}
+      <h2 class="card-title">Requests by Model</h2>
       ${tableHtml}
     </section>
   `;
