@@ -27,7 +27,7 @@ export async function fetchUsage(token: string): Promise<UsageData> {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
-        'User-Agent': 'copilot-premium-request-tracker',
+        'User-Agent': 'copilot-usage-insights',
       },
     });
   } catch (e: unknown) {
@@ -192,7 +192,7 @@ export async function fetchBillingUsage(token: string, login: string): Promise<B
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
-        'User-Agent': 'copilot-premium-request-tracker',
+        'User-Agent': 'copilot-usage-insights',
       },
     });
   } catch (e: unknown) {

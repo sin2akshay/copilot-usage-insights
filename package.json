@@ -1,5 +1,5 @@
 {
-  "name": "copilot-premium-request-tracker",
+  "name": "copilot-usage-insights",
   "displayName": "Copilot Usage Insights",
   "description": "See your GitHub Copilot premium request usage directly in the VS Code status bar.",
   "version": "1.4.0",
