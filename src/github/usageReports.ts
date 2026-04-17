@@ -226,16 +226,18 @@ export async function fetchBillingUsage(token: string, login: string): Promise<B
   const user = (data.user as string) ?? login;
   const rawItems = data.usageItems as Array<Record<string, unknown>> | undefined;
 
-  const items: BillingUsageItem[] = (rawItems ?? []).map(item => ({
-    model: (item.model as string) ?? 'Unknown',
-    pricePerUnit: Number(item.pricePerUnit) || 0,
-    grossQuantity: Number(item.grossQuantity) || 0,
-    grossAmount: Number(item.grossAmount) || 0,
-    discountQuantity: Number(item.discountQuantity) || 0,
-    discountAmount: Number(item.discountAmount) || 0,
-    netQuantity: Number(item.netQuantity) || 0,
-    netAmount: Number(item.netAmount) || 0,
-  }));
+  const items: BillingUsageItem[] = (rawItems ?? [])
+    .map(item => ({
+      model: (item.model as string) ?? 'Unknown',
+      pricePerUnit: Number(item.pricePerUnit) || 0,
+      grossQuantity: Number(item.grossQuantity) || 0,
+      grossAmount: Number(item.grossAmount) || 0,
+      discountQuantity: Number(item.discountQuantity) || 0,
+      discountAmount: Number(item.discountAmount) || 0,
+      netQuantity: Number(item.netQuantity) || 0,
+      netAmount: Number(item.netAmount) || 0,
+    }))
+    .filter(item => item.grossQuantity > 0);
 
   const totalGross = items.reduce((sum, i) => sum + i.grossAmount, 0);
   const totalNet = items.reduce((sum, i) => sum + i.netAmount, 0);

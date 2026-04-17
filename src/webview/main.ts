@@ -526,9 +526,18 @@ function renderRequestBreakdownSection(billing: BillingDataSerialized | null, co
       <section class="card billing-card">
         <h2 class="card-title">Requests by Model</h2>
         <div class="billing-grant-access">
-          <p class="muted">Requests by Model uses the same GitHub billing usage endpoint. Grant access to view per-model request counts even when billed overage is still $0.00.</p>
+          <p class="muted">Requests by Model uses the same GitHub billing usage endpoint. Grant access to view per-model request counts for models with recorded requests, even when billed overage is still $0.00.</p>
           <button class="btn btn-primary btn-sm" data-action="grantBillingAccess">Grant Access</button>
         </div>
+      </section>
+    `;
+  }
+
+  if (billing.items.length === 0) {
+    return `
+      <section class="card billing-card">
+        <h2 class="card-title">Requests by Model</h2>
+        <p class="muted">No model requests recorded for this billing period yet.</p>
       </section>
     `;
   }

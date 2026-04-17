@@ -169,6 +169,25 @@ describe('fetchBillingUsage', () => {
     expect(data.totalNet).toBe(0);
   });
 
+  it('filters out models with zero requests', async () => {
+    fakeFetch.mockResolvedValue(
+      jsonResponse({
+        timePeriod: { year: 2026, month: 4 },
+        user: 'testuser',
+        usageItems: [
+          { model: 'Claude Haiku 4.5', pricePerUnit: 0.04, grossQuantity: 0, grossAmount: 0, discountQuantity: 0, discountAmount: 0, netQuantity: 0, netAmount: 0 },
+          { model: 'GPT-5.4', pricePerUnit: 0.04, grossQuantity: 12, grossAmount: 0.48, discountQuantity: 12, discountAmount: 0.48, netQuantity: 0, netAmount: 0 },
+        ],
+      }),
+    );
+
+    const data = await fetchBillingUsage('tok', 'testuser');
+    expect(data.items).toHaveLength(1);
+    expect(data.items[0].model).toBe('GPT-5.4');
+    expect(data.totalGross).toBeCloseTo(0.48, 2);
+    expect(data.totalNet).toBe(0);
+  });
+
   it('throws AUTH on 401', async () => {
     fakeFetch.mockResolvedValue(jsonResponse({}, 401));
     await expect(fetchBillingUsage('tok', 'testuser')).rejects.toMatchObject({ code: 'AUTH' });
