@@ -25,7 +25,7 @@ It is designed to stay quiet on startup, use your existing GitHub sign-in when a
 
 ![Dashboard preview](assets/dashboard-preview.png)
 
-## Why People Install It
+## Why Install It
 
 - Keep an eye on premium requests without opening GitHub or billing pages.
 - Catch pacing issues early with remaining quota and requests-per-day guidance.
