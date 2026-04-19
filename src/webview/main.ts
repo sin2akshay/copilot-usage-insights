@@ -24,6 +24,7 @@ interface UsageDataSerialized {
   overageEnabled: boolean;
   overageUsed: number;
   plan: string;
+  isManagedPlan: boolean;
   resetDate: string;
   chatQuota: QuotaSnapshotSerialized | null;
   completionsQuota: QuotaSnapshotSerialized | null;
@@ -141,6 +142,9 @@ function render(model: DetailViewModelSerialized): void {
   const assignedStr = data.assignedDate
     ? new Date(data.assignedDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     : '—';
+  const githubSettingsUrl = data.isManagedPlan
+    ? 'https://github.com/settings/copilot/features'
+    : 'https://github.com/settings/billing/premium_requests_usage';
 
   // Pacing calculation
   const remaining = data.noData || data.unlimited ? null : data.remaining;
@@ -232,7 +236,7 @@ function render(model: DetailViewModelSerialized): void {
             <span class="stat-value mono">${pacingPerDay !== null ? `~${pacingPerDay}/day` : '—'}</span>
             <span class="stat-label">Daily Budget</span>
           </div>
-          ${data.overageEnabled && data.overageUsed > 0 ? `
+          ${!data.isManagedPlan && data.overageEnabled && data.overageUsed > 0 ? `
           <div class="stat-item warn-bg">
             <span class="stat-value mono">${data.overageUsed}</span>
             <span class="stat-label">Overage Used</span>
@@ -272,8 +276,8 @@ function render(model: DetailViewModelSerialized): void {
         </div>
       </section>
 
-      ${renderBillingSection(model.billing, config)}
-      ${renderRequestBreakdownSection(model.billing, config)}
+      ${renderBillingSection(model.billing, config, data)}
+      ${renderRequestBreakdownSection(model.billing, config, data)}
 
       <section class="card">
         <h2 class="card-title">Status Bar Settings</h2>
@@ -341,6 +345,7 @@ function render(model: DetailViewModelSerialized): void {
           </div>
         </div>
         <div class="settings-divider"></div>
+        ${data.isManagedPlan ? renderManagedPlanBillingMessage() : `
         <div class="settings-grid">
           <div class="setting-row">
             <label for="setting-billing">Billing Details</label>
@@ -363,7 +368,8 @@ function render(model: DetailViewModelSerialized): void {
               <span class="toggle-track"></span>
             </label>
           </div>
-        </div>
+        </div>`}
+        ${renderManagedPlanEstimateDisclaimer(config, data)}
       </section>
 
       <footer class="footer">
@@ -371,7 +377,7 @@ function render(model: DetailViewModelSerialized): void {
           <span class="muted">Updated ${esc(updatedStr)}</span>
           <span class="dot">·</span>
           ${pacingPerDay !== null ? `<span class="muted">~${pacingPerDay} req/day to stay on pace</span><span class="dot">·</span>` : ''}
-          <a href="https://github.com/settings/billing/premium_requests_usage">View on GitHub</a>
+          <a href="${githubSettingsUrl}">View on GitHub</a>
         </div>
         <button class="btn btn-ghost btn-sm" data-action="disconnect">Disconnect</button>
       </footer>
@@ -459,7 +465,37 @@ function renderQuotaBar(ratio: number, unlimited: boolean): string {
   `;
 }
 
-function renderBillingSection(billing: BillingDataSerialized | null, config: ConfigSerialized): string {
+function renderManagedPlanBillingMessage(): string {
+  return `
+    <div class="settings-note settings-note-info">
+      <div class="settings-note-kicker">Managed Plan</div>
+      <p class="muted">Billing and requests-by-model options are disabled for Copilot Business or Enterprise plans. Only organization admins and billing managers can view usage reports for members.</p>
+    </div>
+  `;
+}
+
+function renderManagedPlanEstimateDisclaimer(config: ConfigSerialized, data: UsageDataSerialized): string {
+  if (!data.isManagedPlan || config.statusBarTextMode !== 'billedOnly') {
+    return '';
+  }
+
+  return `
+    <div class="settings-note settings-note-estimate">
+      <div class="settings-note-kicker">Estimate</div>
+      <p class="muted">Billed Only is shown as an estimate for managed plans. It uses the flat rate of $0.04 per additional premium request described in GitHub Docs, not the exact billed total from your organization or enterprise billing settings.</p>
+    </div>
+  `;
+}
+
+function renderBillingSection(
+  billing: BillingDataSerialized | null,
+  config: ConfigSerialized,
+  data: UsageDataSerialized,
+): string {
+  if (data.isManagedPlan) {
+    return '';
+  }
+
   if (!config.showBillingDetails) {
     return '';
   }
@@ -519,7 +555,15 @@ function renderBillingSection(billing: BillingDataSerialized | null, config: Con
   `;
 }
 
-function renderRequestBreakdownSection(billing: BillingDataSerialized | null, config: ConfigSerialized): string {
+function renderRequestBreakdownSection(
+  billing: BillingDataSerialized | null,
+  config: ConfigSerialized,
+  data: UsageDataSerialized,
+): string {
+  if (data.isManagedPlan) {
+    return '';
+  }
+
   if (!config.showBillingRequestBreakdown) {
     return '';
   }

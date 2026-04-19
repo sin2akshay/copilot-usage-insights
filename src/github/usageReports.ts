@@ -1,5 +1,5 @@
 import type { ApiErrorCode, BillingData, BillingUsageItem, QuotaSnapshot, UsageData } from '../core/models';
-import { PLAN_LABELS } from '../core/models';
+import { isManagedPlan, PLAN_LABELS } from '../core/models';
 
 const COPILOT_INTERNAL_USER_URL = 'https://api.github.com/copilot_internal/user';
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -64,6 +64,7 @@ export async function fetchUsage(token: string): Promise<UsageData> {
   }
 
   const plan = PLAN_LABELS[data.copilot_plan as string] ?? (data.copilot_plan as string) ?? 'Unknown';
+  const managedPlan = isManagedPlan(plan);
 
   const quotaSnapshots = data.quota_snapshots as Record<string, unknown> | undefined;
   const pi = quotaSnapshots?.premium_interactions as Record<string, unknown> | undefined;
@@ -91,6 +92,7 @@ export async function fetchUsage(token: string): Promise<UsageData> {
       overageEnabled: !!pi?.overage_permitted,
       overageUsed: (pi?.overage_count as number) ?? 0,
       plan,
+      isManagedPlan: managedPlan,
       resetDate: data.quota_reset_date
         ? parseDateOrFallback(data.quota_reset_date as string)
         : getNextMonthReset(),
@@ -137,6 +139,7 @@ export async function fetchUsage(token: string): Promise<UsageData> {
     overageEnabled: !!pi.overage_permitted,
     overageUsed: (pi.overage_count as number) ?? 0,
     plan,
+    isManagedPlan: managedPlan,
     resetDate,
     chatQuota,
     completionsQuota,

@@ -132,7 +132,8 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
 
     // Billing fetch (non-blocking)
     const config = getConfig();
-    const needsBillingData = config.showBillingDetails || config.showBillingRequestBreakdown || config.showCostInStatusBar;
+    const needsBillingData = !data.isManagedPlan
+      && (config.showBillingDetails || config.showBillingRequestBreakdown || config.showCostInStatusBar);
     if (needsBillingData) {
       try {
         const billingSession = await auth.getBillingSession(globalState, doSignIn);

@@ -52,6 +52,7 @@ describe('fetchUsage', () => {
     expect(data.noData).toBe(false);
     expect(data.overageEnabled).toBe(true);
     expect(data.overageUsed).toBe(0);
+    expect(data.isManagedPlan).toBe(false);
   });
 
   it('prefers exact remaining counts over percent-derived rounding', async () => {
@@ -93,6 +94,7 @@ describe('fetchUsage', () => {
     expect(data.unlimited).toBe(true);
     expect(data.noData).toBe(false);
     expect(data.plan).toBe('Business');
+    expect(data.isManagedPlan).toBe(true);
   });
 
   it('returns noData when no premium_interactions', async () => {
@@ -106,6 +108,7 @@ describe('fetchUsage', () => {
     const data = await fetchUsage('tok');
     expect(data.noData).toBe(true);
     expect(data.plan).toBe('Free');
+    expect(data.isManagedPlan).toBe(false);
   });
 
   it('throws AUTH on 401', async () => {
@@ -151,6 +154,7 @@ describe('fetchUsage', () => {
       );
       const data = await fetchUsage('tok');
       expect(data.plan).toBe(label);
+      expect(data.isManagedPlan).toBe(label === 'Business' || label === 'Enterprise');
     }
   });
 });

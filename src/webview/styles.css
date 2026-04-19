@@ -317,6 +317,29 @@ input[type="number"]:focus {
 .input-suffix { display: flex; align-items: center; gap: 6px; }
 .suffix { font-size: 0.78em; color: var(--muted); }
 .settings-divider { height: 1px; background: var(--border); margin: 2px 0; }
+.settings-note {
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8em;
+  line-height: 1.55;
+}
+.settings-note-info {
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.settings-note-estimate {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.settings-note-kicker {
+  margin-bottom: 6px;
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
 
 /* Button group toggle (e.g. Left / Right) */
 .btn-group { display: inline-flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }

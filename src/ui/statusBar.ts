@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 
 import type { BillingData, ExtensionConfig, UsageData } from '../core/models';
 
+const PREMIUM_REQUEST_UNIT_PRICE = 0.04;
+
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
 
@@ -45,7 +47,7 @@ export class StatusBar implements vscode.Disposable {
 
   showOffline(lastData: UsageData | null): void {
     if (lastData) {
-      this.showData(lastData, { refreshIntervalMinutes: 5, thresholdEnabled: false, thresholdWarning: 80, thresholdCritical: 90, statusBarTextMode: 'percent', statusBarGraphicMode: 'none', statusBarTextPosition: 'left', segmentedBarWidth: 8, showBillingDetails: false, showBillingRequestBreakdown: true, showCostInStatusBar: false }, null, true);
+      this.showData(lastData, { refreshIntervalMinutes: 5, thresholdEnabled: false, thresholdWarning: 75, thresholdCritical: 90, statusBarTextMode: 'percent', statusBarGraphicMode: 'none', statusBarTextPosition: 'left', segmentedBarWidth: 8, showBillingDetails: false, showBillingRequestBreakdown: false, showCostInStatusBar: false }, null, true);
     } else {
       this.item.text = '$(alert)';
       this.item.tooltip = 'Copilot Usage: Offline';
@@ -96,8 +98,11 @@ export class StatusBar implements vscode.Disposable {
 
     let text = renderStatusBarText(data, pct, config, billing);
     // Cost suffix: append billed/net cost when showCostInStatusBar is enabled
-    if (config.showCostInStatusBar && billing && config.statusBarTextMode !== 'billedOnly') {
-      text += ` \u00b7 $${billing.totalNet.toFixed(2)}`;
+    if (config.showCostInStatusBar && config.statusBarTextMode !== 'billedOnly') {
+      const billedCost = getDisplayedBilledCost(data, billing);
+      if (billedCost !== null) {
+        text += ` \u00b7 $${billedCost.toFixed(2)}`;
+      }
     }
 
     this.item.text = `${text}${staleIcon}`;
@@ -153,7 +158,7 @@ export class StatusBar implements vscode.Disposable {
       );
       md.appendMarkdown(`$(comment-discussion) Chat: **${chatStr}** · $(code) Completions: **${compStr}**\n\n`);
 
-      if (data.overageEnabled && data.overageUsed > 0) {
+      if (!data.isManagedPlan && data.overageEnabled && data.overageUsed > 0) {
         md.appendMarkdown(`$(warning) **${formatQuantity(data.overageUsed)}** over included quota\n\n`);
       }
 
@@ -163,7 +168,10 @@ export class StatusBar implements vscode.Disposable {
         md.appendMarkdown(`$(calendar) Resets **${resetStr}**\n\n`);
       }
 
-      if (config.showBillingDetails && billing) {
+      const billedCost = getDisplayedBilledCost(data, billing);
+      if (data.isManagedPlan && billedCost !== null) {
+        md.appendMarkdown(`$(tag) Estimated billed overage **+$${billedCost.toFixed(2)}**\n\n`);
+      } else if (config.showBillingDetails && billing) {
         md.appendMarkdown(`$(tag) Value **$${billing.totalGross.toFixed(2)}** · billed **+$${billing.totalNet.toFixed(2)}**\n\n`);
       }
     } else if (data.unlimited) {
@@ -195,6 +203,9 @@ export class StatusBar implements vscode.Disposable {
 }
 
 export function computeDisplayPct(data: UsageData): number {
+  if (data.isManagedPlan) {
+    return data.usedPct;
+  }
   if (data.overageEnabled && data.overageUsed > 0 && data.quota > 0) {
     return Math.round(100 + (data.overageUsed / data.quota) * 100);
   }
@@ -204,6 +215,7 @@ export function computeDisplayPct(data: UsageData): number {
 export function renderStatusBarText(data: UsageData, pct: number, config: ExtensionConfig, billing: BillingData | null = null): string {
   const w = config.segmentedBarWidth;
   const remaining = data.remaining;
+  const billedCost = getDisplayedBilledCost(data, billing);
 
   // Text part
   let textPart = '';
@@ -212,7 +224,7 @@ export function renderStatusBarText(data: UsageData, pct: number, config: Extens
     case 'percent':      textPart = `${pct}%`; break;
     case 'countPercent': textPart = `${data.used}/${data.quota} (${pct}%)`; break;
     case 'remaining':    textPart = `${remaining} left`; break;
-    case 'billedOnly':   textPart = `+$${billing ? billing.totalNet.toFixed(2) : '0.00'}`; break;
+    case 'billedOnly':   textPart = `+$${(billedCost ?? 0).toFixed(2)}`; break;
     case 'none': default: textPart = ''; break;
   }
 
@@ -249,6 +261,18 @@ function progressMeter(
   const filled = clamped > 0 ? Math.max(1, Math.round((clamped / 100) * width)) : 0;
   const body = `${options.filled.repeat(filled)}${options.empty.repeat(Math.max(0, width - filled))}`;
   return `${options.prefix ?? ''}${body}${options.suffix ?? ''}`;
+}
+
+function getDisplayedBilledCost(data: UsageData, billing: BillingData | null): number | null {
+  if (data.isManagedPlan) {
+    return data.overageEnabled ? data.overageUsed * PREMIUM_REQUEST_UNIT_PRICE : 0;
+  }
+
+  if (!billing) {
+    return null;
+  }
+
+  return billing.totalNet;
 }
 
 function formatTimestamp(date: Date): string {

@@ -17,6 +17,10 @@ export const PLAN_LABELS: Record<string, string> = {
   enterprise: 'Enterprise',
 };
 
+export function isManagedPlan(plan: string): boolean {
+  return plan === 'Business' || plan === 'Enterprise';
+}
+
 /** Text portion of the status bar display. */
 export type StatusBarTextMode = 'none' | 'count' | 'percent' | 'countPercent' | 'remaining' | 'billedOnly';
 
@@ -48,6 +52,7 @@ export interface UsageData {
   overageEnabled: boolean;
   overageUsed: number;
   plan: string;
+  isManagedPlan: boolean;
   resetDate: Date;
   chatQuota: QuotaSnapshot | null;
   completionsQuota: QuotaSnapshot | null;

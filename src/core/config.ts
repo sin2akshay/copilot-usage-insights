@@ -6,9 +6,9 @@ const SECTION = 'copilotUsageInsights';
 
 export function getConfig(): ExtensionConfig {
   const cfg = vscode.workspace.getConfiguration(SECTION);
-  const rawWarning = cfg.get<number>('threshold.warning', 80);
+  const rawWarning = cfg.get<number>('threshold.warning', 75);
   const rawCritical = cfg.get<number>('threshold.critical', 90);
-  const warning = Number.isFinite(Number(rawWarning)) ? Number(rawWarning) : 80;
+  const warning = Number.isFinite(Number(rawWarning)) ? Number(rawWarning) : 75;
   const critical = Number.isFinite(Number(rawCritical)) ? Number(rawCritical) : 90;
 
   const validTextModes = ['none', 'count', 'percent', 'countPercent', 'remaining', 'billedOnly'];
@@ -38,7 +38,7 @@ export function getConfig(): ExtensionConfig {
     statusBarTextPosition: textPosition,
     segmentedBarWidth: Math.max(4, Math.min(16, cfg.get<number>('segmentedBarWidth', 8))),
     showBillingDetails: cfg.get<boolean>('showBillingDetails', false),
-    showBillingRequestBreakdown: cfg.get<boolean>('showBillingRequestBreakdown', true),
+    showBillingRequestBreakdown: cfg.get<boolean>('showBillingRequestBreakdown', false),
     showCostInStatusBar: cfg.get<boolean>('showCostInStatusBar', false),
   };
 }

@@ -235,3 +235,4 @@ Think about how we will show overage for these users or might have to disable th
 
 2. Turn the Show Requests by model toggle to off by default. I am assuming because of this, it is asking for login twice after install.
 
+3. Turn the warning default to 75% which we changed to 80% earlier

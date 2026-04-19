@@ -34,6 +34,12 @@ describe('extension manifest', () => {
     expect(props).toContain('copilotUsageInsights.threshold.critical');
   });
 
+  it('uses the updated defaults for warning and billing breakdown', () => {
+    const props = manifest.contributes.configuration.properties as Record<string, { default?: unknown }>;
+    expect(props['copilotUsageInsights.threshold.warning']?.default).toBe(75);
+    expect(props['copilotUsageInsights.showBillingRequestBreakdown']?.default).toBe(false);
+  });
+
   it('does not declare chat participants', () => {
     expect((manifest.contributes as Record<string, unknown>)['chatParticipants']).toBeUndefined();
   });

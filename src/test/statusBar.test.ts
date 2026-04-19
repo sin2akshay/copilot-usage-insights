@@ -39,6 +39,7 @@ const baseData: UsageData = {
   overageEnabled: false,
   overageUsed: 0,
   plan: 'Pro',
+  isManagedPlan: false,
   resetDate: new Date(),
   chatQuota: null,
   completionsQuota: null,
@@ -52,14 +53,14 @@ const baseData: UsageData = {
 const baseConfig: ExtensionConfig = {
   refreshIntervalMinutes: 5,
   thresholdEnabled: true,
-  thresholdWarning: 80,
+  thresholdWarning: 75,
   thresholdCritical: 90,
   statusBarTextMode: 'percent',
   statusBarGraphicMode: 'none',
   statusBarTextPosition: 'left',
   segmentedBarWidth: 8,
   showBillingDetails: false,
-  showBillingRequestBreakdown: true,
+  showBillingRequestBreakdown: false,
   showCostInStatusBar: false,
 };
 
@@ -129,6 +130,7 @@ describe('computeDisplayPct', () => {
       overageEnabled: false,
       overageUsed: 0,
       plan: 'Pro',
+      isManagedPlan: false,
       resetDate: new Date(),
       chatQuota: null,
       completionsQuota: null,
@@ -152,6 +154,7 @@ describe('computeDisplayPct', () => {
       overageEnabled: true,
       overageUsed: 33,
       plan: 'Pro',
+      isManagedPlan: false,
       resetDate: new Date(),
       chatQuota: null,
       completionsQuota: null,
@@ -175,6 +178,7 @@ describe('computeDisplayPct', () => {
       overageEnabled: true,
       overageUsed: 0,
       plan: 'Pro',
+      isManagedPlan: false,
       resetDate: new Date(),
       chatQuota: null,
       completionsQuota: null,
@@ -185,6 +189,18 @@ describe('computeDisplayPct', () => {
       accessType: 'unknown',
     };
     expect(computeDisplayPct(data)).toBe(67);
+  });
+
+  it('ignores overage for managed plans', () => {
+    const data: UsageData = {
+      ...baseData,
+      usedPct: 100,
+      overageEnabled: true,
+      overageUsed: 25,
+      plan: 'Business',
+      isManagedPlan: true,
+    };
+    expect(computeDisplayPct(data)).toBe(100);
   });
 });
 
@@ -216,6 +232,28 @@ describe('renderStatusBarText (billedOnly)', () => {
 
   it('renders billedOnly with overage billing data', () => {
     expect(renderStatusBarText(baseData, 50, { ...baseConfig, statusBarTextMode: 'billedOnly' }, overageBilling)).toBe('+$1.20');
+  });
+
+  it('renders estimated billedOnly cost for managed plans', () => {
+    expect(
+      renderStatusBarText(
+        { ...baseData, plan: 'Business', isManagedPlan: true, overageEnabled: true, overageUsed: 30 },
+        50,
+        { ...baseConfig, statusBarTextMode: 'billedOnly' },
+        overageBilling,
+      ),
+    ).toBe('+$1.20');
+  });
+
+  it('renders zero billedOnly cost for managed plans without overage', () => {
+    expect(
+      renderStatusBarText(
+        { ...baseData, plan: 'Business', isManagedPlan: true, overageEnabled: true, overageUsed: 0 },
+        50,
+        { ...baseConfig, statusBarTextMode: 'billedOnly' },
+        null,
+      ),
+    ).toBe('+$0.00');
   });
 });
 

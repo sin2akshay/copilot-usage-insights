@@ -85,7 +85,7 @@
         },
         "copilotUsageInsights.threshold.warning": {
           "type": "number",
-          "default": 80,
+          "default": 75,
           "minimum": 0,
           "maximum": 100,
           "markdownDescription": "Usage percentage at which the status bar turns warning color."
@@ -175,7 +175,7 @@
         },
         "copilotUsageInsights.showBillingRequestBreakdown": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "markdownDescription": "Show the Requests by Model breakdown from the billing usage endpoint for models with recorded requests, even when billed overage is still $0.00. Disable to hide the model-level table while keeping other billing features available."
         }
       }
