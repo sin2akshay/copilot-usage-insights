@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.7.0
+
+- Added managed-plan handling for Copilot Business and Enterprise accounts:
+  - billing controls are replaced with managed-plan messaging
+  - the dashboard footer now links to Copilot feature settings instead of personal billing settings
+  - billing-scope auth is skipped for managed plans
+- Added managed-plan billed-only estimation using the documented `$0.04/request` standard rate when exact billed totals are not available to end users.
+- Restored the default warning threshold to `75%` and turned `Show Requests by Model` off by default.
+- Added managed-plan preview states and updated dashboard note styling for the new messaging.
+
 ## 1.6.0
 
 - Unified premium request count calculations so the status bar, tooltip, and dashboard all show the same usage and remaining values.
