@@ -104,6 +104,19 @@ If you enable billing features, the extension also calls GitHub's premium reques
 
 If no GitHub session is available at startup, the extension stays idle and waits for you to sign in. If the network is unavailable, it keeps the last known values visible and retries automatically.
 
+## Managed Plan Limitation
+
+For Copilot Business and Copilot Enterprise, GitHub does not expose member-level billing reports to individual users through the endpoints this extension can access. The extension still shows your premium request quota, remaining requests, and pacing, but two billing-related limitations apply:
+
+- Billing Details and Requests by Model stay disabled in the dashboard because GitHub reserves those usage reports for organization admins and billing managers.
+- If you use `statusBarTextMode: billedOnly`, the amount is an estimate for managed plans. It uses GitHub's documented `$0.04` rate per additional premium request instead of your organization's exact billed total.
+
+![Managed plan notification](assets/managed-plan-notification.png)
+
+![Estimate notification](assets/estimate-notification.png)
+
+For exact billed totals on managed plans, use your organization's GitHub billing or usage reports.
+
 ## Status Bar Display
 
 The status bar item appears immediately to the left of the GitHub Copilot icon. Two settings control the display: one for text and one for the graphic.

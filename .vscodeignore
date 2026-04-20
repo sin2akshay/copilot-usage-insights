@@ -10,5 +10,7 @@ tsconfig.json
 esbuild.js
 SUPPORT.md
 assets/dashboard-preview.png
+assets/estimate-notification.png
+assets/managed-plan-notification.png
 assets/statusbar-preview.png
 *.vsix
