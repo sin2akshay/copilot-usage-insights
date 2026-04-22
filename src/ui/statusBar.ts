@@ -24,7 +24,7 @@ export class StatusBar implements vscode.Disposable {
   showSignIn(): void {
     this.item.text = '$(copilot) Sign in';
     this.item.command = 'copilotUsageInsights.signIn';
-    this.item.tooltip = 'Click to sign in with GitHub';
+    this.item.tooltip = 'Click to sign in or authorize GitHub access in VS Code';
     this.item.color = undefined;
     this.item.backgroundColor = undefined;
   }

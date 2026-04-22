@@ -399,8 +399,8 @@ function renderSignIn(): void {
           </svg>
         </div>
         <h1 class="sign-in-title">Copilot Usage Insights</h1>
-        <p class="muted">Sign in with GitHub to track your premium request usage.</p>
-        <button class="btn btn-primary" data-action="signIn">Sign in with GitHub</button>
+        <p class="muted">Use your GitHub account in VS Code to track premium request usage. VS Code may ask you to authorize this extension or sign in first.</p>
+        <button class="btn btn-primary" data-action="signIn">Continue with GitHub</button>
       </div>
     </main>
   `;

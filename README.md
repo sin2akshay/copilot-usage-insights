@@ -15,7 +15,7 @@ Copilot Usage Insights adds a compact status bar indicator, a readable hover sum
 - Am I burning through usage too quickly?
 - Am I already in paid overage?
 
-It is designed to stay quiet on startup, use your existing GitHub sign-in when available, and show real numbers from GitHub instead of local guesses.
+It is designed to stay quiet on startup, reuse an existing VS Code GitHub session when one is already available for this extension, and show real numbers from GitHub instead of local guesses.
 
 **Status bar widget and hover tooltip**
 
@@ -50,7 +50,7 @@ We are working on making it available on the VS Code Marketplace as well.
 ### Option 2: Install from the command line
 
 ```powershell
-code --install-extension path\to\copilot-usage-insights-1.7.0.vsix
+code --install-extension path\to\copilot-usage-insights-1.7.1.vsix
 ```
 
 If the `code` command is not available in your shell, install from the VS Code Extensions view instead.
@@ -58,10 +58,11 @@ If the `code` command is not available in your shell, install from the VS Code E
 ## Quick Start
 
 1. Install the latest `.vsix` from the [Releases page](https://github.com/sin2akshay/copilot-usage-insights/releases).
-2. Open VS Code and run **Copilot Usage Insights: Sign In** from the Command Palette.
-3. Look at the status bar item next to the GitHub Copilot icon.
-4. Hover for a quick summary, or click it to open the full dashboard.
-5. If you want billing insight, enable **Billing Details** in the dashboard and grant the additional GitHub scope when prompted.
+2. If the status bar item shows **Sign in**, run **Copilot Usage Insights: Sign In** from the Command Palette.
+3. VS Code may ask you to authorize this extension to use your GitHub account, or to sign in if no matching GitHub session exists yet.
+4. Look at the status bar item next to the GitHub Copilot icon.
+5. Hover for a quick summary, or click it to open the full dashboard.
+6. If you want billing insight, enable **Billing Details** in the dashboard and grant the additional GitHub scope when prompted.
 
 ## What You Get
 
@@ -102,7 +103,7 @@ That means:
 
 If you enable billing features, the extension also calls GitHub's premium request billing usage endpoint. That requires the additional `user` scope so the extension can show gross value, billed overage, and request counts by model.
 
-If no GitHub session is available at startup, the extension stays idle and waits for you to sign in. If the network is unavailable, it keeps the last known values visible and retries automatically.
+If no matching GitHub session is available at startup, or if VS Code still needs your consent to share it with this extension, the extension stays idle and waits for you to click **Sign In**. If the network is unavailable, it keeps the last known values visible and retries automatically.
 
 ## Managed Plan Limitation
 
@@ -165,7 +166,7 @@ When billing details are enabled and available, `showCostInStatusBar` appends th
 
 | Command | Description |
 |---|---|
-| `Copilot Usage Insights: Sign In` | Sign in with GitHub |
+| `Copilot Usage Insights: Sign In` | Sign in with GitHub or authorize the existing VS Code GitHub session |
 | `Copilot Usage Insights: Refresh` | Refresh usage data now |
 | `Copilot Usage Insights: Open Details` | Open the dashboard |
 | `Copilot Usage Insights: Disconnect Account` | Disconnect and clear the session |

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.7.1
+
+- Clarified GitHub sign-in wording across the README, status bar, and dashboard empty state so the extension now explains that VS Code may reuse an existing GitHub session or ask the user to authorize access for this extension.
+- Updated Quick Start and command descriptions to reflect the VS Code authentication consent flow more accurately.
+
 ## 1.7.0
 
 - Added managed-plan handling for Copilot Business and Enterprise accounts:
