@@ -26,8 +26,8 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import type { BillingData, ExtensionConfig, UsageData } from '../core/models';
-import { computeDisplayPct, renderStatusBarText } from '../ui/statusBar';
+import type { BillingData, CreditsAggregate, ExtensionConfig, UsageData } from '../core/models';
+import { computeDisplayPct, renderCreditsStatusBarText, renderStatusBarText } from '../ui/statusBar';
 
 const baseData: UsageData = {
   used: 150,
@@ -52,16 +52,21 @@ const baseData: UsageData = {
 
 const baseConfig: ExtensionConfig = {
   refreshIntervalMinutes: 5,
+  billingView: 'auto',
   thresholdEnabled: true,
   thresholdWarning: 75,
   thresholdCritical: 90,
   statusBarTextMode: 'percent',
   statusBarGraphicMode: 'none',
   statusBarTextPosition: 'left',
+  statusBarCreditsFormat: 'used-over-allowance',
   segmentedBarWidth: 8,
   showBillingDetails: false,
   showBillingRequestBreakdown: false,
   showCostInStatusBar: false,
+  localLogsEnabled: true,
+  localLogsIncludeInsiders: true,
+  localLogsLookbackDays: 35,
 };
 
 describe('renderStatusBarText', () => {
@@ -265,5 +270,38 @@ describe('renderStatusBarText (cost suffix)', () => {
 
   it('billedOnly mode ignores cost suffix (applied externally)', () => {
     expect(renderStatusBarText(baseData, 50, { ...baseConfig, statusBarTextMode: 'billedOnly' }, sampleBilling)).toBe('+$0.00');
+  });
+});
+
+const sampleCredits: CreditsAggregate = {
+  source: 'github-api',
+  fetchedAt: Date.now(),
+  cycleStart: '2026-05-01T00:00:00.000Z',
+  cycleEnd: '2026-06-01T00:00:00.000Z',
+  creditsUsed: 420,
+  creditsAllowance: 1000,
+  dollarsSpent: 4.2,
+  byModel: [],
+};
+
+describe('renderCreditsStatusBarText', () => {
+  it('renders used over allowance by default', () => {
+    expect(renderCreditsStatusBarText(sampleCredits, baseConfig)).toBe('Ⓒ 420 / 1000');
+  });
+
+  it('renders percent format', () => {
+    expect(renderCreditsStatusBarText(sampleCredits, { ...baseConfig, statusBarCreditsFormat: 'percent' })).toBe('Ⓒ 42%');
+  });
+
+  it('renders dollars format', () => {
+    expect(renderCreditsStatusBarText(sampleCredits, { ...baseConfig, statusBarCreditsFormat: 'dollars' })).toBe('Ⓒ $4.20');
+  });
+
+  it('renders credits-only format', () => {
+    expect(renderCreditsStatusBarText(sampleCredits, { ...baseConfig, statusBarCreditsFormat: 'credits' })).toBe('Ⓒ 420 cr');
+  });
+
+  it('renders empty credits state', () => {
+    expect(renderCreditsStatusBarText(null, baseConfig)).toBe('Ⓒ —');
   });
 });

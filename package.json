@@ -63,7 +63,10 @@
         "title": "Copilot Usage Insights: Disconnect Account"
       },
       {
-
+        "command": "copilotUsageInsights.toggleBillingView",
+        "title": "Copilot Usage Insights: Toggle Billing View"
+      },
+      {
         "command": "copilotUsageInsights.openSettings",
         "title": "Copilot Usage Insights: Open Settings"
       }
@@ -77,6 +80,21 @@
           "minimum": 1,
           "maximum": 60,
           "markdownDescription": "How often (in minutes) the extension refreshes your Copilot usage data from GitHub."
+        },
+        "copilotUsageInsights.billingView": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "premium-requests",
+            "ai-credits"
+          ],
+          "enumDescriptions": [
+            "Use Premium Requests before June 1, 2026, then AI Credits for monthly plans.",
+            "Always show the existing Premium Requests view.",
+            "Always show the AI Credits view. Before June 1, this is shown as a preview."
+          ],
+          "default": "auto",
+          "markdownDescription": "Which billing view to show. `auto` keeps Premium Requests before June 1, 2026 and switches monthly plans to AI Credits on June 1."
         },
         "copilotUsageInsights.threshold.enabled": {
           "type": "boolean",
@@ -177,6 +195,45 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Show the Requests by Model breakdown from the billing usage endpoint for models with recorded requests, even when billed overage is still $0.00. Disable to hide the model-level table while keeping other billing features available."
+        },
+        "copilotUsageInsights.localLogs.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Read local Copilot agent debug logs to show session-level AI Credits estimates. Disable to use GitHub API aggregate data only."
+        },
+        "copilotUsageInsights.localLogs.includeInsiders": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also scan VS Code Insiders workspace storage for Copilot agent debug logs."
+        },
+        "copilotUsageInsights.localLogs.lookbackDays": {
+          "type": "number",
+          "default": 35,
+          "minimum": 1,
+          "maximum": 365,
+          "markdownDescription": "Maximum age, in days, of local Copilot chat sessions to include in the AI Credits session list."
+        },
+        "copilotUsageInsights.pricing.overrides": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Per-model AI Credits rate overrides. Keys are model IDs; values can include `inputPerM`, `outputPerM`, and `cachedPerM` in credits per million tokens."
+        },
+        "copilotUsageInsights.statusBar.creditsFormat": {
+          "type": "string",
+          "enum": [
+            "percent",
+            "used-over-allowance",
+            "dollars",
+            "credits"
+          ],
+          "enumDescriptions": [
+            "Show the percent of the monthly AI Credits allowance used.",
+            "Show used credits over the monthly allowance, such as 420 / 1000.",
+            "Show dollars spent, such as $4.20.",
+            "Show used credits only, such as 420 cr."
+          ],
+          "default": "used-over-allowance",
+          "markdownDescription": "Status bar format when AI Credits view is active."
         }
       }
     },
@@ -193,6 +250,9 @@
         },
         {
           "command": "copilotUsageInsights.disconnect"
+        },
+        {
+          "command": "copilotUsageInsights.toggleBillingView"
         },
         {
           "command": "copilotUsageInsights.openSettings"

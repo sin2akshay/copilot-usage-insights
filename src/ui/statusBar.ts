@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import type { BillingData, ExtensionConfig, UsageData } from '../core/models';
+import type { BillingData, BillingView, CreditsAggregate, ExtensionConfig, UsageData } from '../core/models';
 
 const PREMIUM_REQUEST_UNIT_PRICE = 0.04;
 
@@ -45,16 +45,12 @@ export class StatusBar implements vscode.Disposable {
     this.item.backgroundColor = undefined;
   }
 
-  showOffline(lastData: UsageData | null): void {
-    if (lastData) {
-      this.showData(lastData, { refreshIntervalMinutes: 5, thresholdEnabled: false, thresholdWarning: 75, thresholdCritical: 90, statusBarTextMode: 'percent', statusBarGraphicMode: 'none', statusBarTextPosition: 'left', segmentedBarWidth: 8, showBillingDetails: false, showBillingRequestBreakdown: false, showCostInStatusBar: false }, null, true);
-    } else {
-      this.item.text = '$(alert)';
-      this.item.tooltip = 'Copilot Usage: Offline';
-      this.item.command = 'copilotUsageInsights.openDetails';
-      this.item.color = undefined;
-      this.item.backgroundColor = undefined;
-    }
+  showOffline(): void {
+    this.item.text = '$(alert)';
+    this.item.tooltip = 'Copilot Usage: Offline';
+    this.item.command = 'copilotUsageInsights.openDetails';
+    this.item.color = undefined;
+    this.item.backgroundColor = undefined;
   }
 
   showData(
@@ -64,7 +60,15 @@ export class StatusBar implements vscode.Disposable {
     isOffline = false,
     isRateLimited = false,
     billing: BillingData | null = null,
+    activeBillingView: BillingView = 'premium-requests',
+    credits: CreditsAggregate | null = null,
+    isCreditsPreview = false,
   ): void {
+    if (activeBillingView === 'ai-credits') {
+      this.showCreditsData(config, lastUpdatedAt, isOffline, isRateLimited, credits, isCreditsPreview);
+      return;
+    }
+
     const isStale = isOffline;
     const staleIcon = isStale ? ' $(warning)' : '';
 
@@ -110,6 +114,89 @@ export class StatusBar implements vscode.Disposable {
     this.item.command = 'copilotUsageInsights.openDetails';
     this.item.color = color;
     this.item.backgroundColor = undefined;
+  }
+
+  private showCreditsData(
+    config: ExtensionConfig,
+    lastUpdatedAt: Date | null,
+    isOffline: boolean,
+    isRateLimited: boolean,
+    credits: CreditsAggregate | null,
+    isCreditsPreview: boolean,
+  ): void {
+    const staleIcon = isOffline ? ' $(warning)' : '';
+    const previewSuffix = isCreditsPreview ? ' (preview)' : '';
+    this.item.text = `${renderCreditsStatusBarText(credits, config)}${previewSuffix}${staleIcon}`;
+    this.item.tooltip = this.buildCreditsTooltip(credits, lastUpdatedAt, isRateLimited, isOffline, isCreditsPreview);
+    this.item.command = 'copilotUsageInsights.openDetails';
+
+    let color: vscode.ThemeColor | undefined;
+    if (config.thresholdEnabled && credits && credits.creditsAllowance > 0) {
+      const pct = Math.round((credits.creditsUsed / credits.creditsAllowance) * 100);
+      if (pct >= config.thresholdCritical) {
+        color = new vscode.ThemeColor('editorError.foreground');
+      } else if (pct >= config.thresholdWarning) {
+        color = new vscode.ThemeColor('editorWarning.foreground');
+      }
+    }
+    this.item.color = color;
+    this.item.backgroundColor = undefined;
+  }
+
+  private buildCreditsTooltip(
+    credits: CreditsAggregate | null,
+    lastUpdatedAt: Date | null,
+    isRateLimited: boolean,
+    isStale: boolean,
+    isCreditsPreview: boolean,
+  ): vscode.MarkdownString {
+    const md = new vscode.MarkdownString('', true);
+    md.isTrusted = { enabledCommands: ['copilotUsageInsights.refresh', 'copilotUsageInsights.openDetails'] };
+    md.supportHtml = true;
+
+    md.appendMarkdown('$(copilot) · **AI Credits**');
+    if (isCreditsPreview) { md.appendMarkdown(' · preview'); }
+    md.appendMarkdown('\n\n');
+
+    if (!credits) {
+      md.appendMarkdown('Credits data is not available yet.\n\n');
+    } else {
+      const pct = credits.creditsAllowance > 0
+        ? Math.round((credits.creditsUsed / credits.creditsAllowance) * 100)
+        : 0;
+      md.appendMarkdown(`**${formatCycle(credits.cycleStart, credits.cycleEnd)}**\n\n`);
+      md.appendMarkdown(`**${formatCredits(credits.creditsUsed)} / ${formatCredits(credits.creditsAllowance)}** credits used (**${pct}%**)\n\n`);
+      md.appendMarkdown(`$${credits.dollarsSpent.toFixed(2)} spent`);
+      md.appendMarkdown(credits.source === 'local-estimate' ? ' · local estimate' : ' · official from GitHub');
+      md.appendMarkdown('\n\n');
+
+      const topModels = credits.byModel.slice(0, 3);
+      if (topModels.length > 0) {
+        md.appendMarkdown('By model:\n');
+        for (const model of topModels) {
+          md.appendMarkdown(`- ${escapeMarkdown(model.displayName)}: ${formatCredits(model.credits)} cr\n`);
+        }
+        md.appendMarkdown('\n');
+      }
+    }
+
+    md.appendMarkdown('---\n\n');
+    if (lastUpdatedAt) {
+      md.appendMarkdown(`$(clock) ${formatTimestamp(lastUpdatedAt)}`);
+    }
+    md.appendMarkdown(
+      ` &nbsp; [$(refresh) Refresh](command:copilotUsageInsights.refresh "Refresh usage data")`
+      + ` &nbsp; [$(open-preview) Dashboard](command:copilotUsageInsights.openDetails "Open detail panel")`,
+    );
+
+    if (isRateLimited) {
+      md.appendMarkdown('\n\n$(alert) Rate limited · data may be stale');
+    }
+    if (isStale) {
+      md.appendMarkdown('\n\n$(alert) Offline · data may be stale');
+    }
+
+    return md;
   }
 
   private buildTooltip(
@@ -252,6 +339,25 @@ export function renderStatusBarText(data: UsageData, pct: number, config: Extens
     : `${textPart} ${graphicPart}`;
 }
 
+export function renderCreditsStatusBarText(credits: CreditsAggregate | null, config: ExtensionConfig): string {
+  if (!credits) { return 'Ⓒ —'; }
+
+  switch (config.statusBarCreditsFormat) {
+    case 'percent':
+      if (credits.creditsAllowance <= 0) {
+        return credits.creditsUsed > 0 ? `Ⓒ ${formatCredits(credits.creditsUsed)} cr` : 'Ⓒ —%';
+      }
+      return `Ⓒ ${Math.round((credits.creditsUsed / credits.creditsAllowance) * 100)}%`;
+    case 'dollars':
+      return `Ⓒ $${credits.dollarsSpent.toFixed(2)}`;
+    case 'credits':
+      return `Ⓒ ${formatCredits(credits.creditsUsed)} cr`;
+    case 'used-over-allowance':
+    default:
+      return `Ⓒ ${formatCredits(credits.creditsUsed)} / ${formatCredits(credits.creditsAllowance)}`;
+  }
+}
+
 function progressMeter(
   percent: number,
   width: number,
@@ -293,6 +399,20 @@ function formatPercent(value: number): string {
 
 function formatQuantity(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatCredits(value: number): string {
+  if (Number.isInteger(value)) { return String(value); }
+  return value.toFixed(value < 10 ? 2 : 1).replace(/\.0+$/, '').replace(/(\.\d)0$/, '$1');
+}
+
+function formatCycle(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(new Date(endIso).getTime() - 86_400_000);
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const startText = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const endText = end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: sameYear ? undefined : 'numeric' });
+  return `${startText} - ${endText}`;
 }
 
 function escapeMarkdown(text: string): string {

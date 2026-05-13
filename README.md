@@ -17,6 +17,8 @@ Copilot Usage Insights adds a compact status bar indicator, a readable hover sum
 
 It is designed to stay quiet on startup, reuse an existing VS Code GitHub session when one is already available for this extension, and show real numbers from GitHub instead of local guesses.
 
+The extension also includes an AI Credits preview for GitHub's usage-based billing model. You can switch between the existing Premium Requests dashboard and the AI Credits dashboard, keep the setting on `auto`, or force either mode while GitHub completes the transition.
+
 **Status bar widget and hover tooltip**
 
 ![Status bar preview](assets/statusbar-preview.png)
@@ -88,6 +90,7 @@ If the `code` command is not available in your shell, install from the VS Code E
 - Separate quota cards for Chat, Completions, and Premium Interactions.
 - Account details including plan type, Chat status, MCP status, and membership date.
 - Optional billing summary, overage banner, and requests-by-model table.
+- AI Credits overview with official GitHub billing usage when available, plus local session-level estimates from Copilot agent debug logs.
 - Inline settings so most display options can be changed without leaving the dashboard.
 
 ## How It Works
@@ -102,6 +105,10 @@ That means:
 - **Real usage numbers from GitHub**.
 
 If you enable billing features, the extension also calls GitHub's premium request billing usage endpoint. That requires the additional `user` scope so the extension can show gross value, billed overage, and request counts by model.
+
+When AI Credits mode is active, the extension calls GitHub's billing usage endpoint, `/users/{user}/settings/billing/usage`, for the official monthly aggregate. If that endpoint is not available for your account yet, the dashboard falls back to a local estimate from VS Code Copilot agent debug logs when local log tracking is enabled.
+
+Local session tracking reads only metadata from Stable and Insiders Copilot agent debug logs: timestamps, model IDs, token counts, tool names, mode, workspace folder name, and sub-agent counts. It does not store prompt text, response text, tool arguments, tool results, or source code.
 
 If no matching GitHub session is available at startup, or if VS Code still needs your consent to share it with this extension, the extension stays idle and waits for you to click **Sign In**. If the network is unavailable, it keeps the last known values visible and retries automatically.
 
@@ -170,6 +177,7 @@ When billing details are enabled and available, `showCostInStatusBar` appends th
 | `Copilot Usage Insights: Refresh` | Refresh usage data now |
 | `Copilot Usage Insights: Open Details` | Open the dashboard |
 | `Copilot Usage Insights: Disconnect Account` | Disconnect and clear the session |
+| `Copilot Usage Insights: Toggle Billing View` | Switch between Premium Requests and AI Credits |
 | `Copilot Usage Insights: Open Settings` | Open extension settings |
 
 ## Settings
@@ -177,16 +185,22 @@ When billing details are enabled and available, `showCostInStatusBar` appends th
 | Setting | Default | Description |
 |---|---|---|
 | `refreshIntervalMinutes` | `5` | How often to refresh usage data (1-60 min) |
+| `billingView` | `auto` | Billing mode: `auto`, `premium-requests`, or `ai-credits` |
 | `threshold.enabled` | `true` | Enable color-coded threshold warnings |
-| `threshold.warning` | `80` | Warning color threshold (%) |
+| `threshold.warning` | `75` | Warning color threshold (%) |
 | `threshold.critical` | `90` | Critical/error color threshold (%) |
 | `statusBarTextMode` | `percent` | Text portion of the status bar: `none`, `count`, `percent`, `countPercent`, `remaining`, `billedOnly` |
 | `statusBarGraphicMode` | `none` | Graphic portion of the status bar: `none`, `segmented`, `blocks`, `thinBlocks`, `dots`, `circles`, `braille`, `rectangles` |
 | `statusBarTextPosition` | `left` | Whether text appears `left` or `right` of the graphic |
+| `statusBar.creditsFormat` | `used-over-allowance` | AI Credits status bar format: `percent`, `used-over-allowance`, `dollars`, or `credits` |
 | `segmentedBarWidth` | `8` | Number of segments in bar-style graphic modes (4-16) |
 | `showBillingDetails` | `false` | Enable billing summary and overage details; requests the additional GitHub `user` scope when needed |
-| `showBillingRequestBreakdown` | `true` | Show the Requests by Model table when billing-powered request data exists, even if billed overage is still `$0.00` |
+| `showBillingRequestBreakdown` | `false` | Show the Requests by Model table when billing-powered request data exists, even if billed overage is still `$0.00` |
 | `showCostInStatusBar` | `false` | Append the billed/net amount, for example `· $1.20`, when billing data is available |
+| `localLogs.enabled` | `true` | Read local Copilot agent debug logs for session-level AI Credits estimates |
+| `localLogs.includeInsiders` | `true` | Also scan VS Code Insiders workspace storage |
+| `localLogs.lookbackDays` | `35` | Maximum age of local sessions included in the AI Credits dashboard |
+| `pricing.overrides` | `{}` | Per-model AI Credits rate overrides in credits per million tokens |
 
 Most settings can also be changed directly from the dashboard.
 
@@ -212,6 +226,8 @@ The extension stores only your GitHub login name and two small preference flags 
 GitHub access tokens are managed by VS Code's built-in authentication provider and are not stored by this extension.
 
 The extension does not read or store your prompts, responses, files, or editor contents. Usage data comes from GitHub APIs.
+
+AI Credits session detail is local-only and metadata-only. The log parser strips prompt, response, message, text, input, output, tool argument, tool result, and file-content fields before building session records. The dashboard receives sanitized session data without absolute log file paths. The extension does not send local session data to any telemetry endpoint or third-party service.
 
 ## Development
 

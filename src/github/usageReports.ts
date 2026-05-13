@@ -79,6 +79,7 @@ export async function fetchUsage(token: string): Promise<UsageData> {
   const mcpEnabled = data.is_mcp_enabled === true;
   const assignedDate = typeof data.assigned_date === 'string' ? parseDateOrFallbackNull(data.assigned_date) : null;
   const accessType = (data.access_type_sku as string) ?? 'unknown';
+  const creditsAllowance = parseCreditsAllowance(data);
 
   if (!pi || (pi.percent_remaining == null)) {
     const unlimited = !!pi?.unlimited;
@@ -103,6 +104,7 @@ export async function fetchUsage(token: string): Promise<UsageData> {
       mcpEnabled,
       assignedDate,
       accessType,
+      creditsAllowance,
     };
   }
 
@@ -148,7 +150,27 @@ export async function fetchUsage(token: string): Promise<UsageData> {
     mcpEnabled,
     assignedDate,
     accessType,
+    creditsAllowance,
   };
+}
+
+function parseCreditsAllowance(data: Record<string, unknown>): number | undefined {
+  // TODO: Replace these inference keys with GitHub's stable AI Credits allowance field once the API settles.
+  const directKeys = [
+    'ai_credits_allowance',
+    'ai_credits_entitlement',
+    'credits_allowance',
+    'monthly_ai_credits',
+  ];
+  for (const key of directKeys) {
+    const value = Number(data[key]);
+    if (Number.isFinite(value) && value > 0) { return value; }
+  }
+
+  const quotaSnapshots = data.quota_snapshots as Record<string, unknown> | undefined;
+  const rawCredits = quotaSnapshots?.ai_credits as Record<string, unknown> | undefined;
+  const entitlement = Number(rawCredits?.entitlement ?? rawCredits?.allowance);
+  return Number.isFinite(entitlement) && entitlement > 0 ? entitlement : undefined;
 }
 
 function parseQuotaSnapshot(id: string, raw: Record<string, unknown> | undefined): QuotaSnapshot | null {

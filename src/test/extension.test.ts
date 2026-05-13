@@ -21,6 +21,7 @@ describe('extension manifest', () => {
         'copilotUsageInsights.refresh',
         'copilotUsageInsights.openDetails',
         'copilotUsageInsights.disconnect',
+        'copilotUsageInsights.toggleBillingView',
         'copilotUsageInsights.openSettings',
       ]),
     );
@@ -32,6 +33,9 @@ describe('extension manifest', () => {
     expect(props).toContain('copilotUsageInsights.threshold.enabled');
     expect(props).toContain('copilotUsageInsights.threshold.warning');
     expect(props).toContain('copilotUsageInsights.threshold.critical');
+    expect(props).toContain('copilotUsageInsights.billingView');
+    expect(props).toContain('copilotUsageInsights.localLogs.enabled');
+    expect(props).toContain('copilotUsageInsights.statusBar.creditsFormat');
   });
 
   it('uses the updated defaults for warning and billing breakdown', () => {

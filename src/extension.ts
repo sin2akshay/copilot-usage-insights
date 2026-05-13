@@ -1,9 +1,16 @@
 import * as vscode from 'vscode';
 
+import { fetchCreditsAggregate, sessionsToCreditsAggregate } from './billing/creditsData';
+import { isPreviewMode, planInfoFromUsage, resolveView } from './billing/modeResolver';
+import { loadPricing } from './billing/pricing';
 import { getConfig } from './core/config';
-import type { BillingData, DetailViewModel, UsageData } from './core/models';
+import type { BillingData, BillingView, ChatSession, CreditsAggregate, DetailViewModel, ExtensionConfig, PlanInfo, UsageData } from './core/models';
 import * as auth from './github/auth';
 import { fetchBillingUsage, fetchUsage } from './github/usageReports';
+import { getWorkspaceStorageRoots } from './logs/discovery';
+import { SessionCache } from './logs/cache';
+import { buildSessions } from './logs/sessionBuilder';
+import { LogWatcher } from './logs/watcher';
 import { DetailPanel } from './ui/detailPanel';
 import { StatusBar } from './ui/statusBar';
 
@@ -14,9 +21,13 @@ let statusBar: StatusBar;
 let detailPanel: DetailPanel;
 let output: vscode.LogOutputChannel;
 let globalState: vscode.Memento;
+let sessionCache: SessionCache;
+let logWatcher: LogWatcher;
 
 let lastData: UsageData | null = null;
 let lastBillingData: BillingData | null = null;
+let lastCreditsAggregate: CreditsAggregate | null = null;
+let lastSessions: ChatSession[] = [];
 let lastUpdatedAt: Date | null = null;
 let refreshInFlight = false;
 let pendingSignIn = false;
@@ -29,8 +40,11 @@ let recoveryActive = false;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   deactivated = false;
   globalState = context.globalState;
+  loadPricing(context);
   output = vscode.window.createOutputChannel('Copilot Usage Insights', { log: true });
   statusBar = new StatusBar();
+  sessionCache = new SessionCache(context);
+  logWatcher = new LogWatcher();
   detailPanel = new DetailPanel(context.extensionUri, {
     refresh: () => refresh(false, true),
     disconnect: () => doDisconnect(),
@@ -42,19 +56,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void refresh(false, true);
       }
     },
+    setBillingView: async (view: string) => {
+      if (view !== 'auto' && view !== 'premium-requests' && view !== 'ai-credits') { return; }
+      await vscode.workspace.getConfiguration(CONFIG_SECTION).update('billingView', view, vscode.ConfigurationTarget.Global);
+      void refresh(false, true);
+    },
+    enableAgentDebugLog: async () => {
+      await vscode.workspace
+        .getConfiguration()
+        .update('github.copilot.chat.agentDebugLog.fileLogging.enabled', true, vscode.ConfigurationTarget.Global);
+      void vscode.window.showInformationMessage('Copilot agent debug logging enabled for future sessions.');
+      void refresh(false, true);
+    },
     updateSetting: (key: string, value: unknown) => {
       const allowedKeys = [
         'refreshIntervalMinutes',
+        'billingView',
         'threshold.enabled',
         'threshold.warning',
         'threshold.critical',
         'statusBarTextMode',
         'statusBarGraphicMode',
         'statusBarTextPosition',
+        'statusBar.creditsFormat',
         'segmentedBarWidth',
         'showBillingDetails',
         'showBillingRequestBreakdown',
         'showCostInStatusBar',
+        'localLogs.enabled',
+        'localLogs.includeInsiders',
+        'localLogs.lookbackDays',
       ];
       if (!allowedKeys.includes(key)) { return; }
       const cfg = vscode.workspace.getConfiguration(CONFIG_SECTION);
@@ -66,18 +97,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     output,
     statusBar,
     detailPanel,
+    logWatcher,
+    logWatcher.onSessionChanged(() => {
+      if (lastData && getResolvedBillingView(lastData, getConfig()) === 'ai-credits') {
+        void refresh(false, false);
+      }
+    }),
     vscode.commands.registerCommand('copilotUsageInsights.signIn', () => refresh(true, true)),
     vscode.commands.registerCommand('copilotUsageInsights.refresh', () => refresh(false, true)),
     vscode.commands.registerCommand('copilotUsageInsights.openDetails', () => {
       detailPanel.show(getDetailViewModel());
     }),
     vscode.commands.registerCommand('copilotUsageInsights.disconnect', () => doDisconnect()),
+    vscode.commands.registerCommand('copilotUsageInsights.toggleBillingView', () => toggleBillingView()),
     vscode.commands.registerCommand('copilotUsageInsights.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', CONFIG_SECTION),
     ),
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration(CONFIG_SECTION)) {
         resetTimer();
+        resetLogWatcher();
         void refresh();
       }
     }),
@@ -88,6 +127,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   // First refresh — resolve any existing session silently without prompting on startup
+  resetLogWatcher();
   await refresh();
   resetTimer();
 }
@@ -130,9 +170,20 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
     // Persist login
     await globalState.update('copilotUsage.login', session.account.label);
 
-    // Billing fetch (non-blocking)
     const config = getConfig();
-    const needsBillingData = !data.isManagedPlan
+    const plan = planInfoFromUsage(data);
+    const activeBillingView = resolveView(plan, config.billingView);
+
+    if (activeBillingView === 'ai-credits') {
+      await refreshCreditsData(session, config, plan, doSignIn);
+      lastBillingData = null;
+    } else {
+      lastCreditsAggregate = null;
+      lastSessions = [];
+    }
+
+    const needsBillingData = activeBillingView === 'premium-requests'
+      && !data.isManagedPlan
       && (config.showBillingDetails || config.showBillingRequestBreakdown || config.showCostInStatusBar);
     if (needsBillingData) {
       try {
@@ -171,7 +222,9 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
       statusBar.showError('Access denied — check Copilot subscription');
     } else if (code === 'RATE_LIMIT') {
       if (lastData) {
-        statusBar.showData(lastData, getConfig(), lastUpdatedAt, false, true);
+        const config = getConfig();
+        const activeBillingView = getResolvedBillingView(lastData, config);
+        statusBar.showData(lastData, config, lastUpdatedAt, false, true, lastBillingData, activeBillingView, lastCreditsAggregate, activeBillingView === 'ai-credits' && isPreviewMode());
       } else {
         statusBar.showError('Rate limited');
       }
@@ -182,7 +235,11 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
         isOffline = true;
         startRecoveryTimer();
       }
-      statusBar.showOffline(lastData);
+      if (lastData) {
+        updateStatusBar(lastData);
+      } else {
+        statusBar.showOffline();
+      }
     } else {
       statusBar.showError('Network / API error');
     }
@@ -195,13 +252,27 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
 }
 
 function updateStatusBar(data: UsageData): void {
-  statusBar.showData(data, getConfig(), lastUpdatedAt, isOffline, false, lastBillingData);
+  const config = getConfig();
+  const activeBillingView = getResolvedBillingView(data, config);
+  statusBar.showData(
+    data,
+    config,
+    lastUpdatedAt,
+    isOffline,
+    false,
+    lastBillingData,
+    activeBillingView,
+    lastCreditsAggregate,
+    activeBillingView === 'ai-credits' && isPreviewMode(),
+  );
 }
 
 async function doDisconnect(): Promise<void> {
   await auth.disconnect(globalState);
   lastData = null;
   lastBillingData = null;
+  lastCreditsAggregate = null;
+  lastSessions = [];
   lastUpdatedAt = null;
   statusBar.showSignIn();
   detailPanel.update(getDetailViewModel());
@@ -209,14 +280,83 @@ async function doDisconnect(): Promise<void> {
 }
 
 function getDetailViewModel(): DetailViewModel {
+  const config = getConfig();
+  const activeBillingView = lastData ? getResolvedBillingView(lastData, config) : 'premium-requests';
   return {
     data: lastData,
     lastUpdatedAt: lastUpdatedAt?.toISOString() ?? null,
     isOffline,
     login: auth.getLogin(globalState) ?? null,
-    config: getConfig(),
+    config,
+    activeBillingView,
+    isCreditsPreview: activeBillingView === 'ai-credits' && isPreviewMode(),
+    credits: activeBillingView === 'ai-credits' ? lastCreditsAggregate : null,
+    sessions: activeBillingView === 'ai-credits' ? lastSessions : [],
+    agentDebugLogEnabled: isAgentDebugLogEnabled(),
     billing: lastBillingData,
   };
+}
+
+async function refreshCreditsData(
+  session: vscode.AuthenticationSession,
+  config: ExtensionConfig,
+  plan: PlanInfo,
+  interactiveAuth: boolean,
+): Promise<void> {
+  if (config.localLogsEnabled) {
+    try {
+      lastSessions = await buildSessions(sessionCache, config.localLogsLookbackDays, config.localLogsIncludeInsiders);
+    } catch (error: unknown) {
+      output.warn(`Local session parsing failed: ${(error as { message?: string })?.message ?? 'Unknown error'}`);
+      lastSessions = [];
+    }
+  } else {
+    lastSessions = [];
+  }
+
+  let official: CreditsAggregate | null = null;
+  try {
+    const billingSession = await auth.getBillingSession(globalState, interactiveAuth);
+    if (billingSession) {
+      official = await fetchCreditsAggregate(billingSession.accessToken, session.account.label, plan.creditsAllowance);
+    }
+  } catch (error: unknown) {
+    output.warn(`Credits fetch failed (non-blocking): ${(error as { message?: string })?.message ?? 'Unknown credits error'}`);
+  }
+
+  lastCreditsAggregate = official ?? (config.localLogsEnabled
+    ? sessionsToCreditsAggregate(lastSessions, plan.creditsAllowance)
+    : null);
+}
+
+function getResolvedBillingView(data: UsageData, config: ExtensionConfig): BillingView {
+  return resolveView(planInfoFromUsage(data), config.billingView);
+}
+
+async function toggleBillingView(): Promise<void> {
+  const config = getConfig();
+  const nextView = config.billingView === 'auto'
+    ? 'ai-credits'
+    : config.billingView === 'ai-credits'
+      ? 'premium-requests'
+      : 'auto';
+  await vscode.workspace.getConfiguration(CONFIG_SECTION).update('billingView', nextView, vscode.ConfigurationTarget.Global);
+  void refresh(false, true);
+}
+
+function resetLogWatcher(): void {
+  const config = getConfig();
+  if (!config.localLogsEnabled) {
+    logWatcher.start([]);
+    return;
+  }
+  logWatcher.start(getWorkspaceStorageRoots(config.localLogsIncludeInsiders).map(root => root.root));
+}
+
+function isAgentDebugLogEnabled(): boolean {
+  return vscode.workspace
+    .getConfiguration()
+    .get<boolean>('github.copilot.chat.agentDebugLog.fileLogging.enabled', false);
 }
 
 // ---------------------------------------------------------------------------

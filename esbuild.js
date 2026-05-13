@@ -9,8 +9,13 @@ const outDir = path.join(root, 'out');
 
 async function ensureStaticAssets() {
   fs.mkdirSync(path.join(outDir, 'webview'), { recursive: true });
+  fs.mkdirSync(path.join(outDir, 'billing'), { recursive: true });
   const stylesIn = path.join(root, 'src', 'webview', 'styles.css');
   const stylesOut = path.join(outDir, 'webview', 'styles.css');
+  fs.copyFileSync(
+    path.join(root, 'src', 'billing', 'pricing.json'),
+    path.join(outDir, 'billing', 'pricing.json')
+  );
 
   if (!production) {
     fs.copyFileSync(stylesIn, stylesOut);

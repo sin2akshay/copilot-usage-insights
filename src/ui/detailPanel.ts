@@ -10,6 +10,8 @@ export interface DetailPanelHandlers {
   signIn: () => void | Promise<void>;
   openSettings: () => void | Promise<void>;
   grantBillingAccess: () => void | Promise<void>;
+  setBillingView: (view: string) => void | Promise<void>;
+  enableAgentDebugLog: () => void | Promise<void>;
   updateSetting: (key: string, value: unknown) => void | Promise<void>;
 }
 
@@ -63,6 +65,14 @@ export class DetailPanel implements vscode.Disposable {
         case 'grantBillingAccess':
           void this.handlers.grantBillingAccess();
           break;
+        case 'setBillingView':
+          if (typeof message.value === 'string') {
+            void this.handlers.setBillingView(message.value);
+          }
+          break;
+        case 'enableAgentDebugLog':
+          void this.handlers.enableAgentDebugLog();
+          break;
         case 'updateSetting':
           if (typeof message.key === 'string') {
             void this.handlers.updateSetting(message.key, message.value);
@@ -98,6 +108,21 @@ export class DetailPanel implements vscode.Disposable {
             assignedDate: model.data.assignedDate?.toISOString() ?? null,
           }
         : null,
+      sessions: model.sessions.map(session => ({
+        id: session.id,
+        workspaceName: session.workspaceName,
+        editor: session.editor,
+        mode: session.mode,
+        startedAt: session.startedAt,
+        lastTurnAt: session.lastTurnAt,
+        turnCount: session.turnCount,
+        models: session.models,
+        tokens: session.tokens,
+        estimatedCredits: session.estimatedCredits,
+        estimatedDollars: session.estimatedDollars,
+        toolCallSummary: session.toolCallSummary,
+        subAgentCount: session.subAgentCount,
+      })),
     };
     await this.panel.webview.postMessage({ type: 'state', value: serializable });
   }

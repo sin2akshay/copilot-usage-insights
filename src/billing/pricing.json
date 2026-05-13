@@ -1,0 +1,39 @@
+{
+  "lastUpdated": "2026-05-13",
+  "currency": "credits-per-million-tokens",
+  "source": "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing",
+  "note": "1 AI credit = $0.01 USD. Rates derived from GitHub's published usage-based pricing tables (effective June 1, 2026). Values are credits per 1,000,000 tokens = published USD per 1M tokens x 100. Re-verify against the GitHub docs before each release.",
+  "models": {
+    "gpt-4.1":           { "displayName": "GPT-4.1",           "inputPerM": 200,  "outputPerM": 800,  "cachedPerM": 50 },
+    "gpt-5-mini":        { "displayName": "GPT-5 mini",        "inputPerM": 25,   "outputPerM": 200,  "cachedPerM": 2.5 },
+    "gpt-5.2":           { "displayName": "GPT-5.2",           "inputPerM": 175,  "outputPerM": 1400, "cachedPerM": 17.5 },
+    "gpt-5.2-codex":     { "displayName": "GPT-5.2-Codex",     "inputPerM": 175,  "outputPerM": 1400, "cachedPerM": 17.5 },
+    "gpt-5.3-codex":     { "displayName": "GPT-5.3-Codex",     "inputPerM": 175,  "outputPerM": 1400, "cachedPerM": 17.5 },
+    "gpt-5.4":           { "displayName": "GPT-5.4",           "inputPerM": 250,  "outputPerM": 1500, "cachedPerM": 25 },
+    "gpt-5.4-mini":      { "displayName": "GPT-5.4 mini",      "inputPerM": 75,   "outputPerM": 450,  "cachedPerM": 7.5 },
+    "gpt-5.4-nano":      { "displayName": "GPT-5.4 nano",      "inputPerM": 20,   "outputPerM": 125,  "cachedPerM": 2 },
+    "gpt-5.5":           { "displayName": "GPT-5.5",           "inputPerM": 500,  "outputPerM": 3000, "cachedPerM": 50 },
+
+    "claude-haiku-4.5":  { "displayName": "Claude Haiku 4.5",  "inputPerM": 100,  "outputPerM": 500,  "cachedPerM": 10, "cacheWritePerM": 125 },
+    "claude-sonnet-4.5": { "displayName": "Claude Sonnet 4.5", "inputPerM": 300,  "outputPerM": 1500, "cachedPerM": 30, "cacheWritePerM": 375 },
+    "claude-sonnet-4.6": { "displayName": "Claude Sonnet 4.6", "inputPerM": 300,  "outputPerM": 1500, "cachedPerM": 30, "cacheWritePerM": 375 },
+    "claude-opus-4.5":   { "displayName": "Claude Opus 4.5",   "inputPerM": 500,  "outputPerM": 2500, "cachedPerM": 50, "cacheWritePerM": 625 },
+    "claude-opus-4.6":   { "displayName": "Claude Opus 4.6",   "inputPerM": 500,  "outputPerM": 2500, "cachedPerM": 50, "cacheWritePerM": 625 },
+    "claude-opus-4.7":   { "displayName": "Claude Opus 4.7",   "inputPerM": 500,  "outputPerM": 2500, "cachedPerM": 50, "cacheWritePerM": 625 },
+
+    "gemini-2.5-pro":    { "displayName": "Gemini 2.5 Pro",    "inputPerM": 125,  "outputPerM": 1000, "cachedPerM": 12.5 },
+    "gemini-3-flash":    { "displayName": "Gemini 3 Flash",    "inputPerM": 50,   "outputPerM": 300,  "cachedPerM": 5 },
+    "gemini-3.1-pro":    { "displayName": "Gemini 3.1 Pro",    "inputPerM": 200,  "outputPerM": 1200, "cachedPerM": 20 },
+
+    "grok-code-fast-1":  { "displayName": "Grok Code Fast 1",  "inputPerM": 20,   "outputPerM": 150,  "cachedPerM": 2 },
+
+    "raptor-mini":       { "displayName": "Raptor mini",       "inputPerM": 25,   "outputPerM": 200,  "cachedPerM": 2.5 },
+    "goldeneye":         { "displayName": "Goldeneye",         "inputPerM": 125,  "outputPerM": 1000, "cachedPerM": 12.5 },
+
+    "claude-3.7-sonnet": { "displayName": "Claude 3.7 Sonnet (legacy)", "inputPerM": 300,  "outputPerM": 1500, "cachedPerM": 30,  "cacheWritePerM": 375 },
+    "claude-opus-4":     { "displayName": "Claude Opus 4 (legacy)",     "inputPerM": 1500, "outputPerM": 7500, "cachedPerM": 150, "cacheWritePerM": 1875 },
+    "gpt-5":             { "displayName": "GPT-5 (legacy)",             "inputPerM": 125,  "outputPerM": 1000, "cachedPerM": 12.5 },
+
+    "_fallback":         { "displayName": "Unknown model",     "inputPerM": 200,  "outputPerM": 1000, "cachedPerM": 20 }
+  }
+}

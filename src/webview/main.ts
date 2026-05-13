@@ -37,16 +37,21 @@ interface UsageDataSerialized {
 
 interface ConfigSerialized {
   refreshIntervalMinutes: number;
+  billingView: 'auto' | 'premium-requests' | 'ai-credits';
   thresholdEnabled: boolean;
   thresholdWarning: number;
   thresholdCritical: number;
   statusBarTextMode: string;
   statusBarGraphicMode: string;
   statusBarTextPosition: string;
+  statusBarCreditsFormat: 'percent' | 'used-over-allowance' | 'dollars' | 'credits';
   segmentedBarWidth: number;
   showBillingDetails: boolean;
   showBillingRequestBreakdown: boolean;
   showCostInStatusBar: boolean;
+  localLogsEnabled: boolean;
+  localLogsIncludeInsiders: boolean;
+  localLogsLookbackDays: number;
 }
 
 interface BillingUsageItemSerialized {
@@ -69,12 +74,59 @@ interface BillingDataSerialized {
   totalNet: number;
 }
 
+interface ModelBreakdownSerialized {
+  modelId: string;
+  displayName: string;
+  credits: number;
+  dollars: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedTokens?: number;
+  requestCount?: number;
+}
+
+interface CreditsAggregateSerialized {
+  source: 'github-api' | 'local-estimate';
+  fetchedAt: number;
+  cycleStart: string;
+  cycleEnd: string;
+  creditsUsed: number;
+  creditsAllowance: number;
+  dollarsSpent: number;
+  byModel: ModelBreakdownSerialized[];
+}
+
+interface ChatSessionSerialized {
+  id: string;
+  workspaceName: string;
+  editor: 'vscode' | 'vscode-insiders';
+  mode: 'ask' | 'edit' | 'agent' | 'unknown';
+  startedAt: number;
+  lastTurnAt: number;
+  turnCount: number;
+  models: string[];
+  tokens: {
+    input: number;
+    output: number;
+    cached: number;
+  };
+  estimatedCredits: number;
+  estimatedDollars: number;
+  toolCallSummary: Record<string, number>;
+  subAgentCount: number;
+}
+
 interface DetailViewModelSerialized {
   data: UsageDataSerialized | null;
   lastUpdatedAt: string | null;
   isOffline: boolean;
   login: string | null;
   config: ConfigSerialized;
+  activeBillingView: 'premium-requests' | 'ai-credits';
+  isCreditsPreview: boolean;
+  credits: CreditsAggregateSerialized | null;
+  sessions: ChatSessionSerialized[];
+  agentDebugLogEnabled: boolean;
   billing: BillingDataSerialized | null;
 }
 
@@ -102,6 +154,15 @@ const STATUS_BAR_GRAPHIC_MODES = [
   { value: 'circles',    label: 'Circles',     desc: '●●○○' },
   { value: 'braille',    label: 'Braille',     desc: '⣿⣿⣀⣀' },
   { value: 'rectangles', label: 'Rectangles',  desc: '▮▮▯▯' },
+];
+
+const MODEL_COLORS = [
+  'hsl(210, 70%, 55%)',
+  'hsl(150, 60%, 45%)',
+  'hsl(35, 85%, 55%)',
+  'hsl(280, 55%, 62%)',
+  'hsl(0, 65%, 60%)',
+  'hsl(190, 70%, 48%)',
 ];
 
 window.addEventListener('message', event => {
@@ -145,6 +206,28 @@ function render(model: DetailViewModelSerialized): void {
   const githubSettingsUrl = data.isManagedPlan
     ? 'https://github.com/settings/copilot/features'
     : 'https://github.com/settings/billing/premium_requests_usage';
+
+  if (model.activeBillingView === 'ai-credits') {
+    root.innerHTML = `
+      <main class="dashboard">
+        ${renderHeader(data, login, isOffline, model)}
+        ${renderCreditsView(model, updatedStr)}
+        <footer class="footer">
+          <div class="footer-left">
+            <span class="muted">Updated ${esc(updatedStr)}</span>
+            <span class="dot">·</span>
+            <a href="https://github.com/settings/billing/usage">View on GitHub</a>
+          </div>
+          <button class="btn btn-ghost btn-sm" data-action="disconnect">Disconnect</button>
+        </footer>
+      </main>
+    `;
+    bindActions();
+    bindSettings();
+    bindBillingViewToggle();
+    bindCreditsInteractions();
+    return;
+  }
 
   // Pacing calculation
   const remaining = data.noData || data.unlimited ? null : data.remaining;
@@ -190,22 +273,7 @@ function render(model: DetailViewModelSerialized): void {
 
   root.innerHTML = `
     <main class="dashboard">
-      <header class="header">
-        <div class="header-left">
-          <h1 class="title">Copilot Usage Insights</h1>
-          <p class="subtitle">
-            <span class="tag">${esc(data.plan)}</span>
-            <span class="dot">·</span>
-            <span>${esc(login)}</span>
-            ${isOffline ? '<span class="dot">·</span><span class="offline-badge">Offline</span>' : ''}
-          </p>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-icon" data-action="refresh" title="Refresh">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.451 5.609l-.579-.939-1.068.812-.076.094a4.373 4.373 0 0 1 .554 1.9l.009.24A4.382 4.382 0 0 1 7.913 12.1a4.382 4.382 0 0 1-4.378-4.378A4.382 4.382 0 0 1 7.913 3.338c.554 0 1.085.103 1.571.291l.088.04V2.2l-.208-.065A5.557 5.557 0 0 0 7.913 1.9 5.536 5.536 0 0 0 1.784 7.722a6.129 6.129 0 0 0 6.129 6.128c3.382 0 6.128-2.746 6.128-6.128a6.09 6.09 0 0 0-.995-3.367l-.006-.01z"/><path d="M10.5 1.5L8.25 5h4.5L10.5 1.5z"/></svg>
-          </button>
-        </div>
-      </header>
+      ${renderHeader(data, login, isOffline, model)}
 
       <section class="hero">
         <div class="gauge-container">
@@ -386,6 +454,7 @@ function render(model: DetailViewModelSerialized): void {
 
   bindActions();
   bindSettings();
+  bindBillingViewToggle();
 }
 
 function renderSignIn(): void {
@@ -405,6 +474,309 @@ function renderSignIn(): void {
     </main>
   `;
   bindActions();
+}
+
+function renderHeader(
+  data: UsageDataSerialized,
+  login: string,
+  isOffline: boolean,
+  model: DetailViewModelSerialized,
+): string {
+  return `
+    <header class="header">
+      <div class="header-left">
+        <h1 class="title">Copilot Usage Insights</h1>
+        <p class="subtitle">
+          <span class="tag">${esc(data.plan)}</span>
+          <span class="dot">·</span>
+          <span>${esc(login)}</span>
+          ${isOffline ? '<span class="dot">·</span><span class="offline-badge">Offline</span>' : ''}
+          ${model.isCreditsPreview ? '<span class="dot">·</span><span class="preview-badge">Credits preview</span>' : ''}
+        </p>
+        ${renderBillingViewToggle(model)}
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-icon" data-action="refresh" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.451 5.609l-.579-.939-1.068.812-.076.094a4.373 4.373 0 0 1 .554 1.9l.009.24A4.382 4.382 0 0 1 7.913 12.1a4.382 4.382 0 0 1-4.378-4.378A4.382 4.382 0 0 1 7.913 3.338c.554 0 1.085.103 1.571.291l.088.04V2.2l-.208-.065A5.557 5.557 0 0 0 7.913 1.9 5.536 5.536 0 0 0 1.784 7.722a6.129 6.129 0 0 0 6.129 6.128c3.382 0 6.128-2.746 6.128-6.128a6.09 6.09 0 0 0-.995-3.367l-.006-.01z"/><path d="M10.5 1.5L8.25 5h4.5L10.5 1.5z"/></svg>
+        </button>
+      </div>
+    </header>
+  `;
+}
+
+function renderBillingViewToggle(model: DetailViewModelSerialized): string {
+  const active = model.config.billingView;
+  const resolved = model.activeBillingView;
+  const options = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'premium-requests', label: 'Premium Requests' },
+    { value: 'ai-credits', label: 'AI Credits' },
+  ];
+
+  return `
+    <div class="view-toggle" role="group" aria-label="Billing view">
+      ${options.map(option => `
+        <button
+          type="button"
+          class="view-toggle-option ${active === option.value ? 'active' : ''} ${option.value === resolved ? 'resolved' : ''}"
+          data-billing-view="${option.value}"
+          aria-pressed="${active === option.value ? 'true' : 'false'}">
+          ${esc(option.label)}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderCreditsView(model: DetailViewModelSerialized, updatedStr: string): string {
+  return `
+    ${renderCreditsOverview(model.credits, model.sessions, updatedStr)}
+    ${renderSessionList(model)}
+    ${renderCreditsSettings(model.config)}
+  `;
+}
+
+function renderCreditsOverview(
+  credits: CreditsAggregateSerialized | null,
+  sessions: ChatSessionSerialized[],
+  updatedStr: string,
+): string {
+  if (!credits) {
+    return `
+      <section class="card credits-overview">
+        <div class="credits-header">
+          <div>
+            <h2 class="card-title">AI Credits</h2>
+            <p class="muted">Current cycle · updated ${esc(updatedStr)}</p>
+          </div>
+          <button class="btn btn-sm" data-action="refresh">Refresh</button>
+        </div>
+        <div class="credits-empty">
+          <strong>Credits data not yet available</strong>
+          <p class="muted">Grant billing access for GitHub's official aggregate, or keep local logs enabled for a session-based estimate.</p>
+          <button class="btn btn-primary btn-sm" data-action="grantBillingAccess">Grant Access</button>
+        </div>
+      </section>
+    `;
+  }
+
+  const pct = credits.creditsAllowance > 0
+    ? Math.min(999, Math.round((credits.creditsUsed / credits.creditsAllowance) * 100))
+    : 0;
+  const pctWidth = Math.min(100, pct);
+  const tokenTotal = getCreditsTokenTotal(credits) || getSessionTokenTotal(sessions);
+  const sourceText = credits.source === 'github-api' ? 'Official from GitHub' : 'Local estimate';
+
+  return `
+    <section class="card credits-overview">
+      <div class="credits-header">
+        <div>
+          <h2 class="card-title">AI Credits — ${esc(formatCycleRange(credits.cycleStart, credits.cycleEnd))}</h2>
+          <p class="muted">${esc(sourceText)} · updated ${esc(updatedStr)}</p>
+        </div>
+        <button class="btn btn-sm" data-action="refresh">Refresh</button>
+      </div>
+
+      <div class="credits-totals">
+        <div class="credits-total">
+          <strong class="mono">${formatCreditsValue(credits.creditsUsed)} / ${formatCreditsValue(credits.creditsAllowance)}</strong>
+          <span>credits used</span>
+        </div>
+        <div class="credits-total">
+          <strong class="mono">$${credits.dollarsSpent.toFixed(2)}</strong>
+          <span>spent</span>
+        </div>
+        <div class="credits-total">
+          <strong class="mono">${tokenTotal > 0 ? formatNumber(tokenTotal) : '—'}</strong>
+          <span>tokens</span>
+        </div>
+      </div>
+
+      <div class="credits-gauge" aria-label="${pct}% of credits allowance used">
+        <div class="credits-gauge-fill" style="width:${pctWidth}%"></div>
+        <span>${pct}%</span>
+      </div>
+
+      ${credits.byModel.length > 0 ? `
+        ${renderCreditsModelStack(credits.byModel, credits.creditsUsed)}
+        <ul class="credits-legend">
+          ${credits.byModel.map((model, index) => renderCreditsLegendRow(model, credits.creditsUsed, index)).join('')}
+        </ul>
+      ` : '<p class="muted">No usage yet this cycle.</p>'}
+    </section>
+  `;
+}
+
+function renderCreditsModelStack(models: ModelBreakdownSerialized[], totalCredits: number): string {
+  return `
+    <div class="credits-model-stack" role="img" aria-label="Credits by model">
+      ${models.map((model, index) => {
+        const width = totalCredits > 0 ? Math.max(2, (model.credits / totalCredits) * 100) : 0;
+        const tooltip = `${model.displayName}: ${formatCreditsValue(model.credits)} cr`;
+        return `<div class="credits-model-segment" style="width:${width.toFixed(1)}%; background:${MODEL_COLORS[index % MODEL_COLORS.length]}" title="${esc(tooltip)}"></div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderCreditsLegendRow(model: ModelBreakdownSerialized, totalCredits: number, index: number): string {
+  const pct = totalCredits > 0 ? Math.round((model.credits / totalCredits) * 100) : 0;
+  return `
+    <li>
+      <button type="button" class="legend-row" data-filter-model="${esc(model.modelId)}">
+        <span class="legend-swatch" style="background:${MODEL_COLORS[index % MODEL_COLORS.length]}"></span>
+        <span class="legend-model">${esc(model.displayName)}</span>
+        <span class="legend-meta mono">${formatCreditsValue(model.credits)} cr · $${model.dollars.toFixed(2)} · ${pct}%</span>
+      </button>
+    </li>
+  `;
+}
+
+function renderSessionList(model: DetailViewModelSerialized): string {
+  const sessions = model.sessions;
+  const debugBanner = !model.agentDebugLogEnabled
+    ? `<div class="session-banner"><span>Copilot agent debug logging is off. Enable it to collect future session detail.</span><button class="btn btn-sm" data-action="enableAgentDebugLog">Enable</button></div>`
+    : '';
+
+  if (!model.config.localLogsEnabled) {
+    return `
+      <section class="card session-list">
+        <h2 class="card-title">Sessions</h2>
+        <p class="muted">Enable local log tracking in settings to see session detail.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="card session-list">
+      <div class="session-list-header">
+        <h2 class="card-title">Sessions</h2>
+        <span class="session-count"><span id="visible-session-count">${sessions.length}</span> session${sessions.length === 1 ? '' : 's'}</span>
+      </div>
+      ${debugBanner}
+      ${sessions.length > 0 ? renderSessionFilters(sessions) : ''}
+      ${sessions.length === 0 ? '<p class="muted">No sessions in this time range. Try a wider lookback after debug logging has captured chat activity.</p>' : `
+        <ul class="session-cards">
+          ${sessions.map(renderSessionCard).join('')}
+        </ul>
+      `}
+    </section>
+  `;
+}
+
+function renderSessionFilters(sessions: ChatSessionSerialized[]): string {
+  const workspaces = uniqueSorted(sessions.map(session => session.workspaceName));
+  const models = uniqueSorted(sessions.flatMap(session => session.models));
+  return `
+    <div class="session-filters">
+      <select id="filter-time" data-session-filter="time" aria-label="Time range">
+        <option value="cycle">Current cycle</option>
+        <option value="today">Today</option>
+        <option value="7d">Last 7 days</option>
+        <option value="all">All available</option>
+      </select>
+      <select id="filter-workspace" data-session-filter="workspace" aria-label="Workspace">
+        <option value="all">All workspaces</option>
+        ${workspaces.map(workspaceName => `<option value="${esc(workspaceName)}">${esc(workspaceName)}</option>`).join('')}
+      </select>
+      <select id="filter-model" data-session-filter="model" aria-label="Model">
+        <option value="all">All models</option>
+        ${models.map(model => `<option value="${esc(model)}">${esc(humanizeModelName(model))}</option>`).join('')}
+      </select>
+    </div>
+  `;
+}
+
+function renderSessionCard(session: ChatSessionSerialized): string {
+  const tokenTotal = session.tokens.input + session.tokens.output + session.tokens.cached;
+  const models = session.models.length > 0 ? session.models : ['unknown'];
+  const isLive = Date.now() - session.lastTurnAt < 120_000;
+
+  return `
+    <li class="session-card" data-session-id="${esc(session.id)}" data-last="${session.lastTurnAt}" data-workspace="${esc(session.workspaceName)}" data-models="${esc(models.join('|'))}">
+      <button type="button" class="session-summary" data-session-expand="${esc(session.id)}">
+        <span class="session-row-main">
+          ${isLive ? '<span class="live-dot" title="Live"></span>' : ''}
+          <span>${esc(relativeTime(session.lastTurnAt))}</span>
+          <span class="dot">·</span>
+          <span>${esc(session.workspaceName)}</span>
+          <span class="dot">·</span>
+          <span class="mode-pill mode-${session.mode}">${esc(session.mode)}</span>
+          <span class="dot">·</span>
+          <span>${esc(humanizeModelName(models[0]))}</span>
+          <span class="expand-arrow">▾</span>
+        </span>
+        <span class="session-row-sub mono">
+          ${formatNumber(tokenTotal)} tokens · ${session.turnCount} turn${session.turnCount === 1 ? '' : 's'} · ${formatCreditsValue(session.estimatedCredits)} cr ($${session.estimatedDollars.toFixed(2)})
+        </span>
+      </button>
+      <div class="session-detail" hidden>
+        ${renderSessionDetail(session)}
+      </div>
+    </li>
+  `;
+}
+
+function renderSessionDetail(session: ChatSessionSerialized): string {
+  const tools = Object.entries(session.toolCallSummary)
+    .sort((left, right) => right[1] - left[1])
+    .map(([name, count]) => `${esc(name)} (${count})`)
+    .join(' · ');
+  const duration = Math.max(0, Math.round((session.lastTurnAt - session.startedAt) / 60_000));
+
+  return `
+    <dl>
+      <dt>Tool calls</dt><dd>${tools || '—'}</dd>
+      <dt>Sub-agents</dt><dd>${session.subAgentCount}</dd>
+      <dt>Tokens</dt><dd>${formatNumber(session.tokens.input)} in · ${formatNumber(session.tokens.output)} out · ${formatNumber(session.tokens.cached)} cached</dd>
+      <dt>Duration</dt><dd>${duration} min</dd>
+      <dt>Models</dt><dd>${session.models.length > 0 ? session.models.map(humanizeModelName).map(esc).join(', ') : 'Unknown model'}</dd>
+    </dl>
+  `;
+}
+
+function renderCreditsSettings(config: ConfigSerialized): string {
+  const creditsFormatOptions = [
+    { value: 'used-over-allowance', label: 'Used / allowance' },
+    { value: 'percent', label: 'Percent' },
+    { value: 'dollars', label: 'Dollars' },
+    { value: 'credits', label: 'Credits' },
+  ].map(option => `<option value="${option.value}" ${config.statusBarCreditsFormat === option.value ? 'selected' : ''}>${esc(option.label)}</option>`).join('');
+
+  return `
+    <section class="card credits-settings">
+      <h2 class="card-title">AI Credits Settings</h2>
+      <div class="settings-grid">
+        <div class="setting-row">
+          <label for="setting-credits-status">Status Bar Format</label>
+          <select id="setting-credits-status" data-setting="statusBar.creditsFormat">
+            ${creditsFormatOptions}
+          </select>
+        </div>
+        <div class="setting-row">
+          <label for="setting-local-logs">Local Session Logs</label>
+          <label class="toggle">
+            <input type="checkbox" id="setting-local-logs" data-setting="localLogs.enabled" ${config.localLogsEnabled ? 'checked' : ''} />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <div class="setting-row ${!config.localLogsEnabled ? 'disabled' : ''}">
+          <label for="setting-include-insiders">Include Insiders</label>
+          <label class="toggle">
+            <input type="checkbox" id="setting-include-insiders" data-setting="localLogs.includeInsiders" ${config.localLogsIncludeInsiders ? 'checked' : ''} ${!config.localLogsEnabled ? 'disabled' : ''} />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <div class="setting-row ${!config.localLogsEnabled ? 'disabled' : ''}">
+          <label for="setting-lookback">Lookback</label>
+          <div class="input-suffix">
+            <input type="number" id="setting-lookback" data-setting="localLogs.lookbackDays" min="1" max="365" value="${config.localLogsLookbackDays}" ${!config.localLogsEnabled ? 'disabled' : ''} />
+            <span class="suffix">days</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
 }
 
 function renderQuotaCard(title: string, quota: QuotaSnapshotSerialized | null, iconPath: string): string {
@@ -518,7 +890,7 @@ function renderBillingSection(
   // Overage banner
   const overageBanner = billing.totalNet > 0
     ? `<div class="overage-banner">
-        <span class="overage-icon">$(warning)</span>
+        <span class="overage-icon">!</span>
         <span>Overage: <strong>+$${billing.totalNet.toFixed(2)}</strong> billed &nbsp;·&nbsp; ${totalRequests > 0 ? `${Math.round((billing.totalNet / billing.totalGross) * 100)}% of gross` : ''}</span>
       </div>`
     : '';
@@ -672,6 +1044,138 @@ function renderModelBar(quantity: number, maxQuantity: number): string {
       <rect class="model-bar-fill" x="0" y="0" width="${fillWidth}" height="4" rx="2" ry="2"></rect>
     </svg>
   `;
+}
+
+function getCreditsTokenTotal(credits: CreditsAggregateSerialized): number {
+  return credits.byModel.reduce(
+    (sum, model) => sum + (model.inputTokens ?? 0) + (model.outputTokens ?? 0) + (model.cachedTokens ?? 0),
+    0,
+  );
+}
+
+function getSessionTokenTotal(sessions: ChatSessionSerialized[]): number {
+  return sessions.reduce(
+    (sum, session) => sum + session.tokens.input + session.tokens.output + session.tokens.cached,
+    0,
+  );
+}
+
+function formatCycleRange(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(new Date(endIso).getTime() - 86_400_000);
+  const startText = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const endText = end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return `${startText} - ${endText}`;
+}
+
+function formatCreditsValue(value: number): string {
+  if (Number.isInteger(value)) { return String(value); }
+  return value.toFixed(value < 10 ? 2 : 1).replace(/\.0+$/, '').replace(/(\.\d)0$/, '$1');
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+}
+
+function relativeTime(timestamp: number): string {
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.max(0, Math.floor(diffMs / 60_000));
+  if (minutes < 1) { return 'just now'; }
+  if (minutes < 60) { return `${minutes}m ago`; }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) { return `${hours}h ago`; }
+  const days = Math.floor(hours / 24);
+  if (days === 1) { return 'yesterday'; }
+  return `${days}d ago`;
+}
+
+function humanizeModelName(modelId: string): string {
+  if (!modelId || modelId === 'unknown') { return 'Unknown model'; }
+  return modelId
+    .replace(/[_-]/g, ' ')
+    .replace(/\bgpt\b/gi, 'GPT')
+    .replace(/\b([a-z])/g, letter => letter.toUpperCase());
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values.filter(value => value.trim().length > 0))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function bindBillingViewToggle(): void {
+  if (!root) { return; }
+  root.querySelectorAll<HTMLButtonElement>('[data-billing-view]').forEach(button => {
+    button.addEventListener('click', () => {
+      vscode.postMessage({ type: 'setBillingView', value: button.dataset.billingView });
+    });
+  });
+}
+
+function bindCreditsInteractions(): void {
+  if (!root) { return; }
+  root.querySelectorAll<HTMLButtonElement>('[data-session-expand]').forEach(button => {
+    button.addEventListener('click', () => {
+      const card = button.closest<HTMLElement>('.session-card');
+      const detail = card?.querySelector<HTMLElement>('.session-detail');
+      const arrow = button.querySelector<HTMLElement>('.expand-arrow');
+      if (!detail) { return; }
+      detail.hidden = !detail.hidden;
+      if (arrow) { arrow.textContent = detail.hidden ? '▾' : '▴'; }
+    });
+  });
+
+  root.querySelectorAll<HTMLSelectElement>('[data-session-filter]').forEach(select => {
+    select.addEventListener('change', applySessionFilters);
+  });
+
+  root.querySelectorAll<HTMLButtonElement>('[data-filter-model]').forEach(button => {
+    button.addEventListener('click', () => {
+      const modelSelect = root.querySelector<HTMLSelectElement>('#filter-model');
+      const model = button.dataset.filterModel;
+      if (!modelSelect || !model) { return; }
+      modelSelect.value = model;
+      applySessionFilters();
+      root.querySelector('.session-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  applySessionFilters();
+}
+
+function applySessionFilters(): void {
+  if (!root) { return; }
+  const timeFilter = root.querySelector<HTMLSelectElement>('#filter-time')?.value ?? 'cycle';
+  const workspaceFilter = root.querySelector<HTMLSelectElement>('#filter-workspace')?.value ?? 'all';
+  const modelFilter = root.querySelector<HTMLSelectElement>('#filter-model')?.value ?? 'all';
+  const cutoff = sessionTimeCutoff(timeFilter);
+  let visibleCount = 0;
+
+  root.querySelectorAll<HTMLElement>('.session-card').forEach(card => {
+    const lastTurnAt = Number(card.dataset.last ?? 0);
+    const workspaceName = card.dataset.workspace ?? '';
+    const models = (card.dataset.models ?? '').split('|');
+    const visible =
+      lastTurnAt >= cutoff &&
+      (workspaceFilter === 'all' || workspaceName === workspaceFilter) &&
+      (modelFilter === 'all' || models.includes(modelFilter));
+    card.hidden = !visible;
+    if (visible) { visibleCount++; }
+  });
+
+  const count = root.querySelector<HTMLElement>('#visible-session-count');
+  if (count) { count.textContent = String(visibleCount); }
+}
+
+function sessionTimeCutoff(filter: string): number {
+  const now = new Date();
+  if (filter === 'all') { return 0; }
+  if (filter === 'today') {
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  }
+  if (filter === '7d') {
+    return Date.now() - 7 * 24 * 60 * 60 * 1000;
+  }
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
 }
 
 function bindActions(): void {
