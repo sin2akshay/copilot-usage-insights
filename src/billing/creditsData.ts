@@ -63,12 +63,13 @@ export async function fetchCreditsAggregate(
 
   for (const item of copilot) {
     const modelId = item.model || item.sku || 'unknown';
-    const dollars = finiteNumber(item.netAmount) ?? finiteNumber(item.grossAmount) ?? 0;
+    const dollars = finiteNumber(item.grossAmount) ?? finiteNumber(item.netAmount) ?? 0;
     const unitType = item.unitType?.toLowerCase() ?? '';
-    const credits = unitType.includes('credit') && finiteNumber(item.netQuantity) !== null
-      ? finiteNumber(item.netQuantity) ?? 0
+    const quantity = finiteNumber(item.grossQuantity) ?? finiteNumber(item.netQuantity);
+    const credits = unitType.includes('credit') && quantity !== null
+      ? quantity
       : dollars * 100;
-    const requestCount = finiteNumber(item.netQuantity) ?? finiteNumber(item.grossQuantity) ?? 0;
+    const requestCount = quantity ?? 0;
     const existing = byModelMap.get(modelId);
 
     if (existing) {

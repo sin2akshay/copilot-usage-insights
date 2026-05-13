@@ -18,6 +18,7 @@ import { parseLogContent } from '../logs/parser';
 loadPricingFromJson({
   models: {
     'gpt-5': { displayName: 'GPT-5', inputPerM: 100, outputPerM: 500, cachedPerM: 10 },
+    'claude-sonnet-4.6': { displayName: 'Claude Sonnet 4.6', inputPerM: 300, outputPerM: 1500, cachedPerM: 30, cacheWritePerM: 375 },
     _fallback: { displayName: 'Unknown model', inputPerM: 200, outputPerM: 1000, cachedPerM: 20 },
   },
 });
@@ -90,5 +91,27 @@ describe('parseLogContent', () => {
     expect(session?.models).toEqual(['gpt-5', 'claude-3.7-sonnet']);
     expect(session?.modelUsage?.['gpt-5'].inputTokens).toBe(200);
     expect(session?.modelUsage?.['claude-3.7-sonnet'].outputTokens).toBe(125);
+  });
+
+  it('parses Anthropic cache read and cache write token usage', () => {
+    const content = [
+      JSON.stringify({
+        type: 'llm_request',
+        name: 'chat:claude-sonnet-4.6',
+        ts: '2026-05-13T10:00:01Z',
+        model: 'claude-sonnet-4.6',
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          cache_read_input_tokens: 100,
+          cache_creation_input_tokens: 200,
+        },
+      }),
+    ].join('\n');
+
+    const session = parseLogContent(content, '/tmp/cache-write.jsonl');
+    expect(session?.tokens.cached).toBe(300);
+    expect(session?.modelUsage?.['claude-sonnet-4.6'].cachedTokens).toBe(300);
+    expect(session?.estimatedCredits).toBeCloseTo(0.078, 5);
   });
 });

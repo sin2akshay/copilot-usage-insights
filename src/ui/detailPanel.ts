@@ -12,6 +12,7 @@ export interface DetailPanelHandlers {
   grantBillingAccess: () => void | Promise<void>;
   setBillingView: (view: string) => void | Promise<void>;
   enableAgentDebugLog: () => void | Promise<void>;
+  openSessionSource: (sessionId: string) => void | Promise<void>;
   updateSetting: (key: string, value: unknown) => void | Promise<void>;
 }
 
@@ -48,7 +49,7 @@ export class DetailPanel implements vscode.Disposable {
     );
 
     this.panel.webview.html = this.renderHtml(this.panel.webview);
-    this.panel.webview.onDidReceiveMessage((message: { type?: string; key?: string; value?: unknown }) => {
+    this.panel.webview.onDidReceiveMessage((message: { type?: string; key?: string; value?: unknown; sessionId?: unknown }) => {
       switch (message?.type) {
         case 'refresh':
           void this.handlers.refresh();
@@ -72,6 +73,11 @@ export class DetailPanel implements vscode.Disposable {
           break;
         case 'enableAgentDebugLog':
           void this.handlers.enableAgentDebugLog();
+          break;
+        case 'openSessionSource':
+          if (typeof message.sessionId === 'string') {
+            void this.handlers.openSessionSource(message.sessionId);
+          }
           break;
         case 'updateSetting':
           if (typeof message.key === 'string') {
@@ -118,10 +124,12 @@ export class DetailPanel implements vscode.Disposable {
         turnCount: session.turnCount,
         models: session.models,
         tokens: session.tokens,
+        modelUsage: session.modelUsage,
         estimatedCredits: session.estimatedCredits,
         estimatedDollars: session.estimatedDollars,
         toolCallSummary: session.toolCallSummary,
         subAgentCount: session.subAgentCount,
+        sourceAvailable: !!session.filePath,
       })),
     };
     await this.panel.webview.postMessage({ type: 'state', value: serializable });

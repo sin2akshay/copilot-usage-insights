@@ -84,7 +84,7 @@ export function parseLogContent(raw: string, filePath = ''): ChatSession | null 
       const cacheWriteTokens = event.cacheWriteTokens ?? 0;
       inputTotal += inputTokens;
       outputTotal += outputTokens;
-      cachedTotal += cachedTokens;
+      cachedTotal += cachedTokens + cacheWriteTokens;
 
       const modelId = event.model ?? 'unknown';
       if (event.model) { models.add(event.model); }

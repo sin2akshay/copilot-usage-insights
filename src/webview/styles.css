@@ -578,6 +578,30 @@ a:hover { text-decoration: underline; }
   gap: 16px;
 }
 
+.credits-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.month-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.month-picker select {
+  min-width: 148px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--input-fg);
+}
+
 .credits-empty {
   display: flex;
   flex-direction: column;
@@ -634,6 +658,18 @@ a:hover { text-decoration: underline; }
   color: var(--fg);
   text-shadow: 0 1px 2px var(--bg);
 }
+.credits-progress-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.credits-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.78em;
+}
 
 .credits-model-stack {
   display: flex;
@@ -668,6 +704,14 @@ a:hover { text-decoration: underline; }
 .legend-row:hover {
   border-color: var(--border);
   background: color-mix(in srgb, var(--fg) 5%, transparent);
+}
+.legend-row-static {
+  cursor: default;
+  color: var(--fg);
+}
+.legend-row-static:hover {
+  border-color: transparent;
+  background: transparent;
 }
 .legend-swatch { width: 10px; height: 10px; border-radius: 50%; }
 .legend-model { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -705,6 +749,11 @@ a:hover { text-decoration: underline; }
   background: color-mix(in srgb, var(--fg) 3%, transparent);
 }
 .session-card[hidden] { display: none; }
+.session-card-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+}
 .session-summary {
   width: 100%;
   display: flex;
@@ -719,6 +768,15 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
 }
 .session-summary:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.session-source-btn {
+  align-self: center;
+  margin-right: 10px;
+  white-space: nowrap;
+}
+.session-source-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .session-row-main {
   display: flex;
   align-items: center;
@@ -763,6 +821,64 @@ a:hover { text-decoration: underline; }
 .session-detail dt { color: var(--muted); }
 .session-detail dd { min-width: 0; overflow-wrap: anywhere; }
 
+.session-detail-heading {
+  color: var(--muted);
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.session-model-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  margin-bottom: 12px;
+}
+.session-model-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--fg) 2%, transparent);
+}
+.session-model-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.session-model-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.session-model-cost {
+  color: var(--fg);
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+.session-model-meter {
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+.session-model-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--ok));
+}
+.session-model-tokens {
+  color: var(--muted);
+  font-size: 0.78em;
+}
+
 /* ── Grant access info box ── */
 .billing-grant-access {
   display: flex;
@@ -791,10 +907,18 @@ a:hover { text-decoration: underline; }
   .quota-row { grid-template-columns: 1fr; }
   .info-grid { grid-template-columns: repeat(2, 1fr); }
   .credits-totals { grid-template-columns: 1fr; }
+  .credits-header { flex-direction: column; }
+  .credits-header-actions { width: 100%; justify-content: stretch; }
+  .month-picker { width: 100%; justify-content: space-between; }
+  .month-picker select { flex: 1; min-width: 0; }
+  .credits-progress-meta { flex-direction: column; gap: 2px; }
   .session-filters { grid-template-columns: 1fr; }
   .legend-row { grid-template-columns: 12px minmax(0, 1fr); }
   .legend-meta { grid-column: 2; white-space: normal; }
+  .session-card-header { grid-template-columns: 1fr; }
+  .session-source-btn { justify-self: flex-start; margin: 0 0 10px 14px; }
   .session-row-main { flex-wrap: wrap; }
+  .session-model-row-top { flex-direction: column; align-items: flex-start; gap: 2px; }
   .session-detail dl { grid-template-columns: 1fr; }
   .setting-row {
     flex-direction: column;

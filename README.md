@@ -200,7 +200,7 @@ When billing details are enabled and available, `showCostInStatusBar` appends th
 | `localLogs.enabled` | `true` | Read local Copilot agent debug logs for session-level AI Credits estimates |
 | `localLogs.includeInsiders` | `true` | Also scan VS Code Insiders workspace storage |
 | `localLogs.lookbackDays` | `35` | Maximum age of local sessions included in the AI Credits dashboard |
-| `pricing.overrides` | `{}` | Per-model AI Credits rate overrides in credits per million tokens |
+| `pricing.overrides` | `{}` | Per-model AI Credits rate overrides in credits per million tokens; supports `inputPerM`, `outputPerM`, `cachedPerM`, and optional `cacheWritePerM` |
 
 Most settings can also be changed directly from the dashboard.
 

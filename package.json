@@ -216,7 +216,7 @@
         "copilotUsageInsights.pricing.overrides": {
           "type": "object",
           "default": {},
-          "markdownDescription": "Per-model AI Credits rate overrides. Keys are model IDs; values can include `inputPerM`, `outputPerM`, and `cachedPerM` in credits per million tokens."
+          "markdownDescription": "Per-model AI Credits rate overrides. Keys are model IDs; values can include `inputPerM`, `outputPerM`, `cachedPerM`, and optional `cacheWritePerM` in credits per million tokens."
         },
         "copilotUsageInsights.statusBar.creditsFormat": {
           "type": "string",

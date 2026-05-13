@@ -68,6 +68,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void vscode.window.showInformationMessage('Copilot agent debug logging enabled for future sessions.');
       void refresh(false, true);
     },
+    openSessionSource: openSessionSource,
     updateSetting: (key: string, value: unknown) => {
       const allowedKeys = [
         'refreshIntervalMinutes',
@@ -331,6 +332,23 @@ async function refreshCreditsData(
 
 function getResolvedBillingView(data: UsageData, config: ExtensionConfig): BillingView {
   return resolveView(planInfoFromUsage(data), config.billingView);
+}
+
+async function openSessionSource(sessionId: string): Promise<void> {
+  const session = lastSessions.find(item => item.id === sessionId);
+  if (!session) {
+    void vscode.window.showWarningMessage('Session source log is no longer available. Refresh and try again.');
+    return;
+  }
+
+  try {
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(session.filePath));
+    await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
+  } catch (error: unknown) {
+    const message = (error as { message?: string })?.message ?? 'Unknown error';
+    output.warn(`Unable to open session source log: ${message}`);
+    void vscode.window.showWarningMessage('Unable to open the session source log. It may have been moved or deleted.');
+  }
 }
 
 async function toggleBillingView(): Promise<void> {

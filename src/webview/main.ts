@@ -110,10 +110,31 @@ interface ChatSessionSerialized {
     output: number;
     cached: number;
   };
+  modelUsage?: Record<string, SessionModelUsageSerialized>;
   estimatedCredits: number;
   estimatedDollars: number;
   toolCallSummary: Record<string, number>;
   subAgentCount: number;
+  sourceAvailable?: boolean;
+}
+
+interface SessionModelUsageSerialized {
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  credits: number;
+  dollars: number;
+  requestCount: number;
+}
+
+interface SessionModelRow {
+  modelId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  credits: number;
+  dollars: number;
+  requestCount: number;
 }
 
 interface DetailViewModelSerialized {
@@ -132,6 +153,8 @@ interface DetailViewModelSerialized {
 
 const vscode = acquireVsCodeApi();
 const root = document.getElementById('app');
+let currentModel: DetailViewModelSerialized | null = null;
+let selectedCreditsMonth: string | null = null;
 
 const GAUGE_RADIUS = 56;
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * GAUGE_RADIUS; // ~351.86
@@ -168,6 +191,7 @@ const MODEL_COLORS = [
 window.addEventListener('message', event => {
   const message = event.data as { type?: string; value?: DetailViewModelSerialized };
   if (message.type === 'state' && message.value) {
+    currentModel = message.value;
     render(message.value);
     vscode.setState(message.value);
   }
@@ -175,6 +199,7 @@ window.addEventListener('message', event => {
 
 const savedState = vscode.getState() as DetailViewModelSerialized | undefined;
 if (savedState) {
+  currentModel = savedState;
   render(savedState);
 }
 
@@ -529,8 +554,16 @@ function renderBillingViewToggle(model: DetailViewModelSerialized): string {
 }
 
 function renderCreditsView(model: DetailViewModelSerialized, updatedStr: string): string {
+  const monthOptions = getCreditsMonthOptions(model.credits, model.sessions);
+  const selectedMonth = normalizeSelectedCreditsMonth(monthOptions);
+  const currentCycleMonth = model.credits ? monthKeyFromIso(model.credits.cycleStart) : monthKeyFromTimestamp(Date.now());
+  const monthSessions = filterSessionsByMonth(model.sessions, selectedMonth);
+  const credits = model.credits && selectedMonth === currentCycleMonth
+    ? model.credits
+    : aggregateSessionsForMonth(monthSessions, selectedMonth, model.credits?.creditsAllowance ?? 0);
+
   return `
-    ${renderCreditsOverview(model.credits, model.sessions, updatedStr)}
+    ${renderCreditsOverview(credits, monthSessions, updatedStr, monthOptions, selectedMonth)}
     ${renderSessionList(model)}
     ${renderCreditsSettings(model.config)}
   `;
@@ -540,7 +573,11 @@ function renderCreditsOverview(
   credits: CreditsAggregateSerialized | null,
   sessions: ChatSessionSerialized[],
   updatedStr: string,
+  monthOptions: Array<{ value: string; label: string }>,
+  selectedMonth: string,
 ): string {
+  const monthPicker = renderCreditsMonthPicker(monthOptions, selectedMonth);
+
   if (!credits) {
     return `
       <section class="card credits-overview">
@@ -549,7 +586,10 @@ function renderCreditsOverview(
             <h2 class="card-title">AI Credits</h2>
             <p class="muted">Current cycle · updated ${esc(updatedStr)}</p>
           </div>
-          <button class="btn btn-sm" data-action="refresh">Refresh</button>
+          <div class="credits-header-actions">
+            ${monthPicker}
+            <button class="btn btn-sm" data-action="refresh">Refresh</button>
+          </div>
         </div>
         <div class="credits-empty">
           <strong>Credits data not yet available</strong>
@@ -566,6 +606,8 @@ function renderCreditsOverview(
   const pctWidth = Math.min(100, pct);
   const tokenTotal = getCreditsTokenTotal(credits) || getSessionTokenTotal(sessions);
   const sourceText = credits.source === 'github-api' ? 'Official from GitHub' : 'Local estimate';
+  const sessionModelIds = new Set(sessions.flatMap(session => session.models));
+  const hasCreditUsage = credits.creditsUsed > 0;
 
   return `
     <section class="card credits-overview">
@@ -574,7 +616,10 @@ function renderCreditsOverview(
           <h2 class="card-title">AI Credits — ${esc(formatCycleRange(credits.cycleStart, credits.cycleEnd))}</h2>
           <p class="muted">${esc(sourceText)} · updated ${esc(updatedStr)}</p>
         </div>
-        <button class="btn btn-sm" data-action="refresh">Refresh</button>
+        <div class="credits-header-actions">
+          ${monthPicker}
+          <button class="btn btn-sm" data-action="refresh">Refresh</button>
+        </div>
       </div>
 
       <div class="credits-totals">
@@ -584,7 +629,7 @@ function renderCreditsOverview(
         </div>
         <div class="credits-total">
           <strong class="mono">$${credits.dollarsSpent.toFixed(2)}</strong>
-          <span>spent</span>
+          <span>estimated spent</span>
         </div>
         <div class="credits-total">
           <strong class="mono">${tokenTotal > 0 ? formatNumber(tokenTotal) : '—'}</strong>
@@ -592,18 +637,36 @@ function renderCreditsOverview(
         </div>
       </div>
 
-      <div class="credits-gauge" aria-label="${pct}% of credits allowance used">
-        <div class="credits-gauge-fill" style="width:${pctWidth}%"></div>
-        <span>${pct}%</span>
+      <div class="credits-progress-block">
+        <div class="credits-gauge" aria-label="${pct}% of credits allowance used">
+          <div class="credits-gauge-fill" style="width:${pctWidth}%"></div>
+          <span>${pct}%</span>
+        </div>
+        <div class="credits-progress-meta">
+          <span>${formatCreditsValue(credits.creditsUsed)} credits used</span>
+          <span>${credits.creditsAllowance > 0 ? `${formatCreditsValue(Math.max(0, credits.creditsAllowance - credits.creditsUsed))} remaining` : 'No allowance detected'}</span>
+        </div>
       </div>
 
       ${credits.byModel.length > 0 ? `
-        ${renderCreditsModelStack(credits.byModel, credits.creditsUsed)}
+        ${hasCreditUsage ? renderCreditsModelStack(credits.byModel, credits.creditsUsed) : ''}
         <ul class="credits-legend">
-          ${credits.byModel.map((model, index) => renderCreditsLegendRow(model, credits.creditsUsed, index)).join('')}
+          ${credits.byModel.map((model, index) => renderCreditsLegendRow(model, credits.creditsUsed, index, sessionModelIds.has(model.modelId))).join('')}
         </ul>
       ` : '<p class="muted">No usage yet this cycle.</p>'}
     </section>
+  `;
+}
+
+function renderCreditsMonthPicker(monthOptions: Array<{ value: string; label: string }>, selectedMonth: string): string {
+  if (monthOptions.length <= 1) { return ''; }
+  return `
+    <label class="month-picker">
+      <span>Month</span>
+      <select id="credits-month" aria-label="AI Credits month">
+        ${monthOptions.map(option => `<option value="${esc(option.value)}" ${option.value === selectedMonth ? 'selected' : ''}>${esc(option.label)}</option>`).join('')}
+      </select>
+    </label>
   `;
 }
 
@@ -619,15 +682,21 @@ function renderCreditsModelStack(models: ModelBreakdownSerialized[], totalCredit
   `;
 }
 
-function renderCreditsLegendRow(model: ModelBreakdownSerialized, totalCredits: number, index: number): string {
+function renderCreditsLegendRow(model: ModelBreakdownSerialized, totalCredits: number, index: number, isFilterable: boolean): string {
   const pct = totalCredits > 0 ? Math.round((model.credits / totalCredits) * 100) : 0;
+  const tokenTotal = (model.inputTokens ?? 0) + (model.outputTokens ?? 0) + (model.cachedTokens ?? 0);
+  const requestText = model.requestCount && model.requestCount > 0 ? `${formatNumber(model.requestCount)} req · ` : '';
+  const tokenText = tokenTotal > 0 ? ` · ${formatNumber(tokenTotal)} tokens` : '';
+  const tagName = isFilterable ? 'button' : 'div';
+  const filterAttr = isFilterable ? ` type="button" data-filter-model="${esc(model.modelId)}"` : '';
+  const titleAttr = isFilterable ? ' title="Filter local sessions by this model"' : ' title="No matching local sessions are available for this model row"';
   return `
     <li>
-      <button type="button" class="legend-row" data-filter-model="${esc(model.modelId)}">
+      <${tagName}${filterAttr} class="legend-row ${isFilterable ? '' : 'legend-row-static'}"${titleAttr}>
         <span class="legend-swatch" style="background:${MODEL_COLORS[index % MODEL_COLORS.length]}"></span>
         <span class="legend-model">${esc(model.displayName)}</span>
-        <span class="legend-meta mono">${formatCreditsValue(model.credits)} cr · $${model.dollars.toFixed(2)} · ${pct}%</span>
-      </button>
+        <span class="legend-meta mono">${requestText}${formatCreditsValue(model.credits)} cr · $${model.dollars.toFixed(2)} · ${pct}%${tokenText}</span>
+      </${tagName}>
     </li>
   `;
 }
@@ -670,7 +739,7 @@ function renderSessionFilters(sessions: ChatSessionSerialized[]): string {
   return `
     <div class="session-filters">
       <select id="filter-time" data-session-filter="time" aria-label="Time range">
-        <option value="cycle">Current cycle</option>
+        <option value="cycle">Selected month</option>
         <option value="today">Today</option>
         <option value="7d">Last 7 days</option>
         <option value="all">All available</option>
@@ -691,25 +760,29 @@ function renderSessionCard(session: ChatSessionSerialized): string {
   const tokenTotal = session.tokens.input + session.tokens.output + session.tokens.cached;
   const models = session.models.length > 0 ? session.models : ['unknown'];
   const isLive = Date.now() - session.lastTurnAt < 120_000;
+  const modelSummary = summarizeSessionModels(session);
 
   return `
     <li class="session-card" data-session-id="${esc(session.id)}" data-last="${session.lastTurnAt}" data-workspace="${esc(session.workspaceName)}" data-models="${esc(models.join('|'))}">
-      <button type="button" class="session-summary" data-session-expand="${esc(session.id)}">
-        <span class="session-row-main">
-          ${isLive ? '<span class="live-dot" title="Live"></span>' : ''}
-          <span>${esc(relativeTime(session.lastTurnAt))}</span>
-          <span class="dot">·</span>
-          <span>${esc(session.workspaceName)}</span>
-          <span class="dot">·</span>
-          <span class="mode-pill mode-${session.mode}">${esc(session.mode)}</span>
-          <span class="dot">·</span>
-          <span>${esc(humanizeModelName(models[0]))}</span>
-          <span class="expand-arrow">▾</span>
-        </span>
-        <span class="session-row-sub mono">
-          ${formatNumber(tokenTotal)} tokens · ${session.turnCount} turn${session.turnCount === 1 ? '' : 's'} · ${formatCreditsValue(session.estimatedCredits)} cr ($${session.estimatedDollars.toFixed(2)})
-        </span>
-      </button>
+      <div class="session-card-header">
+        <button type="button" class="session-summary" data-session-expand="${esc(session.id)}">
+          <span class="session-row-main">
+            ${isLive ? '<span class="live-dot" title="Live"></span>' : ''}
+            <span>${esc(relativeTime(session.lastTurnAt))}</span>
+            <span class="dot">·</span>
+            <span>${esc(session.workspaceName)}</span>
+            <span class="dot">·</span>
+            <span class="mode-pill mode-${session.mode}">${esc(session.mode)}</span>
+            <span class="dot">·</span>
+            <span>${esc(modelSummary)}</span>
+            <span class="expand-arrow">▾</span>
+          </span>
+          <span class="session-row-sub mono">
+            ${formatNumber(tokenTotal)} tokens · ${session.turnCount} turn${session.turnCount === 1 ? '' : 's'} · ${formatCreditsValue(session.estimatedCredits)} cr ($${session.estimatedDollars.toFixed(2)} est.)
+          </span>
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm session-source-btn" data-open-session-source="${esc(session.id)}" ${session.sourceAvailable === false ? 'disabled' : ''} title="Open the local Copilot log file for this session">Open log</button>
+      </div>
       <div class="session-detail" hidden>
         ${renderSessionDetail(session)}
       </div>
@@ -725,13 +798,43 @@ function renderSessionDetail(session: ChatSessionSerialized): string {
   const duration = Math.max(0, Math.round((session.lastTurnAt - session.startedAt) / 60_000));
 
   return `
+    ${renderSessionModelUsage(session)}
     <dl>
       <dt>Tool calls</dt><dd>${tools || '—'}</dd>
       <dt>Sub-agents</dt><dd>${session.subAgentCount}</dd>
       <dt>Tokens</dt><dd>${formatNumber(session.tokens.input)} in · ${formatNumber(session.tokens.output)} out · ${formatNumber(session.tokens.cached)} cached</dd>
       <dt>Duration</dt><dd>${duration} min</dd>
-      <dt>Models</dt><dd>${session.models.length > 0 ? session.models.map(humanizeModelName).map(esc).join(', ') : 'Unknown model'}</dd>
     </dl>
+  `;
+}
+
+function renderSessionModelUsage(session: ChatSessionSerialized): string {
+  const rows = getSessionModelRows(session);
+  const totalCredits = rows.reduce((sum, row) => sum + row.credits, 0);
+  const totalTokens = rows.reduce((sum, row) => sum + row.inputTokens + row.outputTokens + row.cachedTokens, 0);
+
+  return `
+    <div class="session-model-usage" aria-label="Model usage for this session">
+      <div class="session-detail-heading">Model usage</div>
+      ${rows.map(row => {
+        const rowTokens = row.inputTokens + row.outputTokens + row.cachedTokens;
+        const shareBase = totalCredits > 0 ? totalCredits : totalTokens;
+        const shareValue = totalCredits > 0 ? row.credits : rowTokens;
+        const width = shareBase > 0 ? Math.max(3, Math.min(100, (shareValue / shareBase) * 100)) : 0;
+        return `
+          <div class="session-model-row">
+            <div class="session-model-row-top">
+              <span class="session-model-name">${esc(humanizeModelName(row.modelId))}</span>
+              <span class="session-model-cost mono">${formatCreditsValue(row.credits)} cr · $${row.dollars.toFixed(2)}</span>
+            </div>
+            <div class="session-model-meter"><span style="width:${width.toFixed(1)}%"></span></div>
+            <div class="session-model-tokens mono">
+              ${formatNumber(row.inputTokens)} in · ${formatNumber(row.outputTokens)} out · ${formatNumber(row.cachedTokens)} cached · ${formatNumber(row.requestCount)} request${row.requestCount === 1 ? '' : 's'}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
   `;
 }
 
@@ -1060,6 +1163,161 @@ function getSessionTokenTotal(sessions: ChatSessionSerialized[]): number {
   );
 }
 
+function getCreditsMonthOptions(
+  credits: CreditsAggregateSerialized | null,
+  sessions: ChatSessionSerialized[],
+): Array<{ value: string; label: string }> {
+  const keys = new Set<string>();
+  if (credits) { keys.add(monthKeyFromIso(credits.cycleStart)); }
+  for (const session of sessions) {
+    keys.add(monthKeyFromTimestamp(session.lastTurnAt));
+  }
+
+  return [...keys]
+    .sort((left, right) => right.localeCompare(left))
+    .map(key => ({ value: key, label: formatMonthKey(key) }));
+}
+
+function normalizeSelectedCreditsMonth(monthOptions: Array<{ value: string; label: string }>): string {
+  if (monthOptions.length === 0) {
+    selectedCreditsMonth = monthKeyFromTimestamp(Date.now());
+    return selectedCreditsMonth;
+  }
+  if (!selectedCreditsMonth || !monthOptions.some(option => option.value === selectedCreditsMonth)) {
+    selectedCreditsMonth = monthOptions[0].value;
+  }
+  return selectedCreditsMonth;
+}
+
+function filterSessionsByMonth(sessions: ChatSessionSerialized[], monthKey: string): ChatSessionSerialized[] {
+  return sessions.filter(session => monthKeyFromTimestamp(session.lastTurnAt) === monthKey);
+}
+
+function aggregateSessionsForMonth(
+  sessions: ChatSessionSerialized[],
+  monthKey: string,
+  allowance: number,
+): CreditsAggregateSerialized | null {
+  if (sessions.length === 0) { return null; }
+
+  const byModel = new Map<string, ModelBreakdownSerialized>();
+  for (const session of sessions) {
+    for (const row of getSessionModelRows(session)) {
+      const existing = byModel.get(row.modelId);
+      if (existing) {
+        existing.credits += row.credits;
+        existing.dollars += row.dollars;
+        existing.inputTokens = (existing.inputTokens ?? 0) + row.inputTokens;
+        existing.outputTokens = (existing.outputTokens ?? 0) + row.outputTokens;
+        existing.cachedTokens = (existing.cachedTokens ?? 0) + row.cachedTokens;
+        existing.requestCount = (existing.requestCount ?? 0) + row.requestCount;
+      } else {
+        byModel.set(row.modelId, {
+          modelId: row.modelId,
+          displayName: humanizeModelName(row.modelId),
+          credits: row.credits,
+          dollars: row.dollars,
+          inputTokens: row.inputTokens,
+          outputTokens: row.outputTokens,
+          cachedTokens: row.cachedTokens,
+          requestCount: row.requestCount,
+        });
+      }
+    }
+  }
+
+  const { startIso, endIso } = monthRangeFromKey(monthKey);
+  const byModelRows = [...byModel.values()]
+    .map(model => ({
+      ...model,
+      credits: roundCredits(model.credits),
+      dollars: roundDollars(model.dollars),
+    }))
+    .sort((left, right) => right.credits - left.credits);
+
+  return {
+    source: 'local-estimate',
+    fetchedAt: Date.now(),
+    cycleStart: startIso,
+    cycleEnd: endIso,
+    creditsUsed: roundCredits(byModelRows.reduce((sum, model) => sum + model.credits, 0)),
+    creditsAllowance: allowance,
+    dollarsSpent: roundDollars(byModelRows.reduce((sum, model) => sum + model.dollars, 0)),
+    byModel: byModelRows,
+  };
+}
+
+function getSessionModelRows(session: ChatSessionSerialized): SessionModelRow[] {
+  const usage = Object.entries(session.modelUsage ?? {});
+  if (usage.length > 0) {
+    return usage
+      .map(([modelId, item]) => ({
+        modelId,
+        inputTokens: item.inputTokens,
+        outputTokens: item.outputTokens,
+        cachedTokens: item.cachedTokens,
+        credits: item.credits,
+        dollars: item.dollars,
+        requestCount: item.requestCount,
+      }))
+      .sort((left, right) => right.credits - left.credits);
+  }
+
+  return [{
+    modelId: session.models[0] ?? 'unknown',
+    inputTokens: session.tokens.input,
+    outputTokens: session.tokens.output,
+    cachedTokens: session.tokens.cached,
+    credits: session.estimatedCredits,
+    dollars: session.estimatedDollars,
+    requestCount: Math.max(1, session.turnCount),
+  }];
+}
+
+function summarizeSessionModels(session: ChatSessionSerialized): string {
+  const rows = getSessionModelRows(session);
+  if (rows.length === 0) { return 'Unknown model'; }
+  const top = rows.slice(0, 2).map(row => `${humanizeModelName(row.modelId)} ${formatCreditsValue(row.credits)} cr`);
+  return rows.length > 2 ? `${top.join(' + ')} +${rows.length - 2}` : top.join(' + ');
+}
+
+function monthKeyFromIso(iso: string): string {
+  return monthKeyFromTimestamp(new Date(iso).getTime());
+}
+
+function monthKeyFromTimestamp(timestamp: number): string {
+  const date = new Date(timestamp);
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${month}`;
+}
+
+function monthRangeFromKey(monthKey: string): { startMs: number; endMs: number; startIso: string; endIso: string } {
+  const [yearText, monthText] = monthKey.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  const startMs = Date.UTC(year, monthIndex, 1);
+  const endMs = Date.UTC(year, monthIndex + 1, 1);
+  return {
+    startMs,
+    endMs,
+    startIso: new Date(startMs).toISOString(),
+    endIso: new Date(endMs).toISOString(),
+  };
+}
+
+function formatMonthKey(monthKey: string): string {
+  const { startMs } = monthRangeFromKey(monthKey);
+  return new Date(startMs).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+function roundCredits(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function roundDollars(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function formatCycleRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
   const end = new Date(new Date(endIso).getTime() - 86_400_000);
@@ -1113,6 +1371,21 @@ function bindBillingViewToggle(): void {
 
 function bindCreditsInteractions(): void {
   if (!root) { return; }
+  root.querySelector<HTMLSelectElement>('#credits-month')?.addEventListener('change', event => {
+    selectedCreditsMonth = (event.currentTarget as HTMLSelectElement).value;
+    if (currentModel) { render(currentModel); }
+  });
+
+  root.querySelectorAll<HTMLButtonElement>('[data-open-session-source]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      const sessionId = button.dataset.openSessionSource;
+      if (sessionId) {
+        vscode.postMessage({ type: 'openSessionSource', sessionId });
+      }
+    });
+  });
+
   root.querySelectorAll<HTMLButtonElement>('[data-session-expand]').forEach(button => {
     button.addEventListener('click', () => {
       const card = button.closest<HTMLElement>('.session-card');
@@ -1147,7 +1420,7 @@ function applySessionFilters(): void {
   const timeFilter = root.querySelector<HTMLSelectElement>('#filter-time')?.value ?? 'cycle';
   const workspaceFilter = root.querySelector<HTMLSelectElement>('#filter-workspace')?.value ?? 'all';
   const modelFilter = root.querySelector<HTMLSelectElement>('#filter-model')?.value ?? 'all';
-  const cutoff = sessionTimeCutoff(timeFilter);
+  const range = sessionTimeRange(timeFilter);
   let visibleCount = 0;
 
   root.querySelectorAll<HTMLElement>('.session-card').forEach(card => {
@@ -1155,7 +1428,7 @@ function applySessionFilters(): void {
     const workspaceName = card.dataset.workspace ?? '';
     const models = (card.dataset.models ?? '').split('|');
     const visible =
-      lastTurnAt >= cutoff &&
+      lastTurnAt >= range.start && lastTurnAt < range.end &&
       (workspaceFilter === 'all' || workspaceName === workspaceFilter) &&
       (modelFilter === 'all' || models.includes(modelFilter));
     card.hidden = !visible;
@@ -1166,16 +1439,19 @@ function applySessionFilters(): void {
   if (count) { count.textContent = String(visibleCount); }
 }
 
-function sessionTimeCutoff(filter: string): number {
+function sessionTimeRange(filter: string): { start: number; end: number } {
   const now = new Date();
-  if (filter === 'all') { return 0; }
+  if (filter === 'all') { return { start: 0, end: Number.POSITIVE_INFINITY }; }
   if (filter === 'today') {
-    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    return { start, end: start + 86_400_000 };
   }
   if (filter === '7d') {
-    return Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return { start: Date.now() - 7 * 24 * 60 * 60 * 1000, end: Number.POSITIVE_INFINITY };
   }
-  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const monthKey = selectedCreditsMonth ?? monthKeyFromTimestamp(Date.now());
+  const { startMs, endMs } = monthRangeFromKey(monthKey);
+  return { start: startMs, end: endMs };
 }
 
 function bindActions(): void {

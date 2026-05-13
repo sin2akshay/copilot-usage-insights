@@ -43,6 +43,7 @@ beforeEach(() => {
   loadPricingFromJson({
     models: {
       'gpt-5': { displayName: 'GPT-5', inputPerM: 100, outputPerM: 500, cachedPerM: 10 },
+      'claude-sonnet-4.6': { displayName: 'Claude Sonnet 4.6', inputPerM: 300, outputPerM: 1500, cachedPerM: 30, cacheWritePerM: 375 },
       _fallback: { displayName: 'Unknown model', inputPerM: 200, outputPerM: 1000, cachedPerM: 20 },
     },
   });
@@ -86,6 +87,12 @@ describe('pricing and cost calculation', () => {
     expect(cost.dollars).toBeCloseTo(11.05, 5);
   });
 
+  it('includes model-specific cache-write token rates', () => {
+    const cost = tokensToCredits('claude-sonnet-4.6', 0, 0, 0, 1_000_000);
+    expect(cost.credits).toBe(375);
+    expect(cost.dollars).toBeCloseTo(3.75, 5);
+  });
+
   it('merges user overrides with bundled pricing', () => {
     vscodeConfig.values.set('pricing.overrides', {
       'gpt-5': { outputPerM: 750 },
@@ -114,6 +121,19 @@ describe('credits aggregate API', () => {
     expect(aggregate?.creditsUsed).toBe(200);
     expect(aggregate?.dollarsSpent).toBe(2);
     expect(aggregate?.byModel.map(model => model.modelId)).toEqual(['gpt-5', 'claude-3.7-sonnet']);
+  });
+
+  it('uses gross AI Credits usage when net billing is discounted to zero', async () => {
+    fakeFetch.mockResolvedValue(jsonResponse({
+      usageItems: [
+        { product: 'Copilot', model: 'gpt-5', unitType: 'credits', grossQuantity: 42, grossAmount: 0.42, netQuantity: 0, netAmount: 0 },
+      ],
+    }));
+
+    const aggregate = await fetchCreditsAggregate('tok', 'testuser', 1000);
+    expect(aggregate?.creditsUsed).toBe(42);
+    expect(aggregate?.dollarsSpent).toBe(0.42);
+    expect(aggregate?.byModel[0]?.requestCount).toBe(42);
   });
 
   it('returns null for users outside enhanced billing access', async () => {
