@@ -4,3 +4,4 @@ dist/
 *.vsix
 *.log
 .dev/
+.claude/

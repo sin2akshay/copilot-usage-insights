@@ -188,6 +188,21 @@ const MODEL_COLORS = [
   'hsl(190, 70%, 48%)',
 ];
 
+const modelColorCache = new Map<string, string>();
+let modelColorTopId: string | null = null;
+
+function modelColor(modelId: string, asTopModel?: true): string {
+  if (asTopModel) { modelColorTopId = modelId; }
+  if (modelId === modelColorTopId) { return MODEL_COLORS[0]; }
+  if (modelColorCache.has(modelId)) { return modelColorCache.get(modelId)!; }
+  // FNV-1a hash; skip index 0 (reserved for top-credit model)
+  let h = 2166136261;
+  for (let i = 0; i < modelId.length; i++) { h = Math.imul(h ^ modelId.charCodeAt(i), 16777619) >>> 0; }
+  const color = MODEL_COLORS[1 + (h % (MODEL_COLORS.length - 1))];
+  modelColorCache.set(modelId, color);
+  return color;
+}
+
 window.addEventListener('message', event => {
   const message = event.data as { type?: string; value?: DetailViewModelSerialized };
   if (message.type === 'state' && message.value) {
@@ -562,31 +577,47 @@ function renderCreditsView(model: DetailViewModelSerialized, updatedStr: string)
     ? model.credits
     : aggregateSessionsForMonth(monthSessions, selectedMonth, model.credits?.creditsAllowance ?? 0);
 
+  const now = Date.now();
+  const cycleStartMs = credits ? new Date(credits.cycleStart).getTime() : monthRangeFromKey(selectedMonth).startMs;
+  const cycleEndMs = credits ? new Date(credits.cycleEnd).getTime() : monthRangeFromKey(selectedMonth).endMs;
+  const daysElapsed = Math.max(1, Math.ceil((now - cycleStartMs) / 86_400_000));
+  const daysLeft = Math.max(0, Math.ceil((cycleEndMs - now) / 86_400_000));
+
+  // Seed model color resolver with top-credit model
+  const topModelId = credits?.byModel[0]?.modelId;
+  if (topModelId) { modelColor(topModelId, true); }
+
   return `
-    ${renderCreditsOverview(credits, monthSessions, updatedStr, monthOptions, selectedMonth)}
-    ${renderSessionList(model)}
+    ${renderStatusHero(credits, monthSessions, updatedStr, monthOptions, selectedMonth, daysLeft)}
+    ${renderBurnChart(monthSessions, credits, selectedMonth)}
+    <div class="two-col">
+      ${renderModelMiniCard(credits, model.sessions)}
+      ${renderPaceCard(credits, daysLeft, daysElapsed)}
+    </div>
+    ${renderSessionTable(model, monthSessions)}
     ${renderCreditsSettings(model.config)}
   `;
 }
 
-function renderCreditsOverview(
+function renderStatusHero(
   credits: CreditsAggregateSerialized | null,
-  sessions: ChatSessionSerialized[],
+  monthSessions: ChatSessionSerialized[],
   updatedStr: string,
   monthOptions: Array<{ value: string; label: string }>,
   selectedMonth: string,
+  daysLeft: number,
 ): string {
   const monthPicker = renderCreditsMonthPicker(monthOptions, selectedMonth);
 
   if (!credits) {
     return `
-      <section class="card credits-overview">
-        <div class="credits-header">
-          <div>
+      <section class="card status-hero">
+        <div class="hero-header">
+          <div class="hero-header-left">
             <h2 class="card-title">AI Credits</h2>
-            <p class="muted">Current cycle · updated ${esc(updatedStr)}</p>
+            <p class="muted">updated ${esc(updatedStr)}</p>
           </div>
-          <div class="credits-header-actions">
+          <div class="hero-header-actions">
             ${monthPicker}
             <button class="btn btn-sm" data-action="refresh">Refresh</button>
           </div>
@@ -601,59 +632,63 @@ function renderCreditsOverview(
   }
 
   const pct = credits.creditsAllowance > 0
-    ? Math.min(999, Math.round((credits.creditsUsed / credits.creditsAllowance) * 100))
+    ? Math.round((credits.creditsUsed / credits.creditsAllowance) * 100)
     : 0;
-  const pctWidth = Math.min(100, pct);
-  const tokenTotal = getCreditsTokenTotal(credits) || getSessionTokenTotal(sessions);
-  const sourceText = credits.source === 'github-api' ? 'Official from GitHub' : 'Local estimate';
-  const sessionModelIds = new Set(sessions.flatMap(session => session.models));
-  const hasCreditUsage = credits.creditsUsed > 0;
+  const isOver = credits.creditsAllowance > 0 && credits.creditsUsed > credits.creditsAllowance;
+  const tokenTotal = getCreditsTokenTotal(credits) || getSessionTokenTotal(monthSessions);
+  const sourceText = credits.source === 'github-api' ? 'Official' : 'Local estimate';
+  const overageCredits = isOver ? credits.creditsUsed - credits.creditsAllowance : 0;
+
+  let statusClass = 'hero-status-ok';
+  let statusLabel = '✓ On track';
+  if (isOver) {
+    statusClass = 'hero-status-over';
+    statusLabel = '⚠ Over budget';
+  } else if (pct >= 80) {
+    statusClass = 'hero-status-warn';
+    statusLabel = '⚠ Approaching limit';
+  }
 
   return `
-    <section class="card credits-overview">
-      <div class="credits-header">
-        <div>
+    <section class="card status-hero ${isOver ? 'status-hero-over' : ''}">
+      <div class="hero-header">
+        <div class="hero-header-left">
           <h2 class="card-title">AI Credits — ${esc(formatCycleRange(credits.cycleStart, credits.cycleEnd))}</h2>
           <p class="muted">${esc(sourceText)} · updated ${esc(updatedStr)}</p>
         </div>
-        <div class="credits-header-actions">
+        <div class="hero-header-actions">
           ${monthPicker}
           <button class="btn btn-sm" data-action="refresh">Refresh</button>
         </div>
       </div>
-
-      <div class="credits-totals">
-        <div class="credits-total">
-          <strong class="mono">${formatCreditsValue(credits.creditsUsed)} / ${formatCreditsValue(credits.creditsAllowance)}</strong>
-          <span>credits used</span>
+      <div class="hero-body">
+        <div class="hero-main">
+          <div class="hero-value mono">${formatCreditsValue(credits.creditsUsed)} <span class="hero-unit">AIC</span> used</div>
+          ${credits.creditsAllowance > 0 ? `<div class="hero-allowance muted">of ${formatCreditsValue(credits.creditsAllowance)} AIC allowance</div>` : ''}
+          <div class="hero-bar-wrap">
+            <div class="hero-bar">
+              <div class="hero-bar-fill ${isOver ? 'hero-bar-over' : ''}" style="width:${Math.min(100, pct)}%"></div>
+            </div>
+            <span class="hero-pct mono ${isOver ? 'crit-text' : ''}">${pct}%</span>
+          </div>
+          ${isOver ? `<div class="hero-overage crit-text">+${formatCreditsValue(overageCredits)} AIC over · +$${(overageCredits / 100).toFixed(2)} est.</div>` : ''}
         </div>
-        <div class="credits-total">
-          <strong class="mono">$${credits.dollarsSpent.toFixed(2)}</strong>
-          <span>estimated spent</span>
-        </div>
-        <div class="credits-total">
-          <strong class="mono">${tokenTotal > 0 ? formatNumber(tokenTotal) : '—'}</strong>
-          <span>tokens</span>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span class="hero-stat-value mono">$${credits.dollarsSpent.toFixed(2)}</span>
+            <span class="hero-stat-label">Est. spent</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-value mono">${tokenTotal > 0 ? formatNumber(tokenTotal) : '—'}</span>
+            <span class="hero-stat-label">Tokens</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-value mono">${daysLeft}</span>
+            <span class="hero-stat-label">Days left</span>
+          </div>
+          <div class="hero-status-badge ${statusClass}">${statusLabel}</div>
         </div>
       </div>
-
-      <div class="credits-progress-block">
-        <div class="credits-gauge" aria-label="${pct}% of credits allowance used">
-          <div class="credits-gauge-fill" style="width:${pctWidth}%"></div>
-          <span>${pct}%</span>
-        </div>
-        <div class="credits-progress-meta">
-          <span>${formatCreditsValue(credits.creditsUsed)} credits used</span>
-          <span>${credits.creditsAllowance > 0 ? `${formatCreditsValue(Math.max(0, credits.creditsAllowance - credits.creditsUsed))} remaining` : 'No allowance detected'}</span>
-        </div>
-      </div>
-
-      ${credits.byModel.length > 0 ? `
-        ${hasCreditUsage ? renderCreditsModelStack(credits.byModel, credits.creditsUsed) : ''}
-        <ul class="credits-legend">
-          ${credits.byModel.map((model, index) => renderCreditsLegendRow(model, credits.creditsUsed, index, sessionModelIds.has(model.modelId))).join('')}
-        </ul>
-      ` : '<p class="muted">No usage yet this cycle.</p>'}
     </section>
   `;
 }
@@ -670,39 +705,111 @@ function renderCreditsMonthPicker(monthOptions: Array<{ value: string; label: st
   `;
 }
 
-function renderCreditsModelStack(models: ModelBreakdownSerialized[], totalCredits: number): string {
+function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggregateSerialized | null, selectedMonth: string): string {
+  const { startMs, endMs } = monthRangeFromKey(selectedMonth);
+  const daysInMonth = Math.round((endMs - startMs) / 86_400_000);
+  const dailyTotals = new Array<number>(daysInMonth).fill(0);
+  for (const s of sessions) {
+    const idx = Math.floor((s.lastTurnAt - startMs) / 86_400_000);
+    if (idx >= 0 && idx < daysInMonth) { dailyTotals[idx] += s.estimatedCredits; }
+  }
+  if (!dailyTotals.some(v => v > 0)) { return ''; }
+  const allowance = credits?.creditsAllowance ?? 0;
+  const maxDay = Math.max(...dailyTotals, 1);
+  const barW = 100 / daysInMonth;
+  let cumulative = 0;
+  const bars = dailyTotals.map((v, i) => {
+    cumulative += v;
+    const over = allowance > 0 && cumulative > allowance;
+    const h = (v / maxDay) * 100;
+    return `<rect x="${(i * barW).toFixed(2)}%" y="${(100 - h).toFixed(2)}%" width="${(barW - 0.4).toFixed(2)}%" height="${h.toFixed(2)}%" fill="${over ? 'var(--crit)' : 'var(--accent)'}" rx="1"/>`;
+  }).join('');
   return `
-    <div class="credits-model-stack" role="img" aria-label="Credits by model">
-      ${models.map((model, index) => {
-        const width = totalCredits > 0 ? Math.max(2, (model.credits / totalCredits) * 100) : 0;
-        const tooltip = `${model.displayName}: ${formatCreditsValue(model.credits)} cr`;
-        return `<div class="credits-model-segment" style="width:${width.toFixed(1)}%; background:${MODEL_COLORS[index % MODEL_COLORS.length]}" title="${esc(tooltip)}"></div>`;
-      }).join('')}
+    <div class="card burn-card">
+      <div class="burn-header">
+        <span class="card-title">Daily Burn</span>
+        <div class="burn-legend">
+          <span class="burn-leg burn-leg-ok">within budget</span>
+          <span class="burn-leg burn-leg-over">over budget</span>
+        </div>
+      </div>
+      <svg class="burn-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Daily credit burn chart">${bars}</svg>
     </div>
   `;
 }
 
-function renderCreditsLegendRow(model: ModelBreakdownSerialized, totalCredits: number, index: number, isFilterable: boolean): string {
-  const pct = totalCredits > 0 ? Math.round((model.credits / totalCredits) * 100) : 0;
-  const tokenTotal = (model.inputTokens ?? 0) + (model.outputTokens ?? 0) + (model.cachedTokens ?? 0);
-  const requestText = model.requestCount && model.requestCount > 0 ? `${formatNumber(model.requestCount)} req · ` : '';
-  const tokenText = tokenTotal > 0 ? ` · ${formatNumber(tokenTotal)} tokens` : '';
-  const tagName = isFilterable ? 'button' : 'div';
-  const filterAttr = isFilterable ? ` type="button" data-filter-model="${esc(model.modelId)}"` : '';
-  const titleAttr = isFilterable ? ' title="Filter local sessions by this model"' : ' title="No matching local sessions are available for this model row"';
+function renderModelMiniCard(credits: CreditsAggregateSerialized | null, allSessions: ChatSessionSerialized[]): string {
+  if (!credits || credits.byModel.length === 0) {
+    return `<div class="mini-card"><span class="card-title">Credits by Model</span><p class="muted" style="margin-top:8px">No model data yet.</p></div>`;
+  }
+  const total = credits.creditsUsed || 1;
+  const topCredits = credits.byModel[0].credits || 1;
+  const sessionModelIds = new Set(allSessions.flatMap(s => s.models));
+  const rows = credits.byModel.map(model => {
+    const pct = Math.round((model.credits / total) * 100);
+    const barPct = Math.max(2, (model.credits / topCredits) * 100);
+    const color = modelColor(model.modelId);
+    const isFilterable = sessionModelIds.has(model.modelId);
+    const tag = isFilterable ? 'button' : 'div';
+    const attrs = isFilterable ? ` type="button" data-filter-model="${esc(model.modelId)}" title="Filter sessions by this model"` : '';
+    return `
+      <${tag}${attrs} class="hbar-row${isFilterable ? ' hbar-row-btn' : ''}">
+        <span class="hbar-swatch" style="background:${color}"></span>
+        <span class="hbar-name">${esc(model.displayName)}</span>
+        <div class="hbar-track"><div class="hbar-fill" style="width:${barPct.toFixed(1)}%;background:${color}"></div></div>
+        <span class="hbar-pct mono">${pct}%</span>
+        <span class="hbar-val muted">${formatCreditsValue(model.credits)} AIC</span>
+      </${tag}>
+    `;
+  }).join('');
   return `
-    <li>
-      <${tagName}${filterAttr} class="legend-row ${isFilterable ? '' : 'legend-row-static'}"${titleAttr}>
-        <span class="legend-swatch" style="background:${MODEL_COLORS[index % MODEL_COLORS.length]}"></span>
-        <span class="legend-model">${esc(model.displayName)}</span>
-        <span class="legend-meta mono">${requestText}${formatCreditsValue(model.credits)} cr · $${model.dollars.toFixed(2)} · ${pct}%${tokenText}</span>
-      </${tagName}>
-    </li>
+    <div class="mini-card">
+      <span class="card-title">Credits by Model</span>
+      <div class="hbar-list">${rows}</div>
+    </div>
   `;
 }
 
-function renderSessionList(model: DetailViewModelSerialized): string {
-  const sessions = model.sessions;
+function renderPaceCard(credits: CreditsAggregateSerialized | null, daysLeft: number, daysElapsed: number): string {
+  if (!credits) {
+    return `<div class="mini-card"><span class="card-title">Pace &amp; Projections</span><p class="muted" style="margin-top:8px">No data yet.</p></div>`;
+  }
+  const allowance = credits.creditsAllowance;
+  const used = credits.creditsUsed;
+  const avgPerDay = used / daysElapsed;
+  const daysInCycle = daysElapsed + daysLeft;
+  const projected = avgPerDay * daysInCycle;
+  const budgetPerDay = allowance > 0 ? allowance / daysInCycle : 0;
+  const overageCredits = Math.max(0, projected - allowance);
+  const isOver = used > allowance && allowance > 0;
+  const isProjectedOver = projected > allowance && allowance > 0;
+
+  type PaceRow = { label: string; value: string; mono?: boolean };
+  const rows: PaceRow[] = [
+    { label: 'Status', value: isOver ? '<span class="crit-text">Over budget</span>' : isProjectedOver ? '<span class="warn-text">Projected over</span>' : '<span class="ok-text">On track</span>' },
+    { label: 'Avg / day', value: `${formatCreditsValue(avgPerDay)} AIC`, mono: true },
+    ...(allowance > 0 ? [{ label: 'Budget / day', value: `${formatCreditsValue(budgetPerDay)} AIC`, mono: true }] : []),
+    ...(allowance > 0 ? [{ label: 'Projected', value: `${formatCreditsValue(projected)} AIC${isProjectedOver ? ' <span class="crit-text">▲</span>' : ''}`, mono: true }] : []),
+    ...(isProjectedOver ? [{ label: 'Est. overage', value: `<span class="crit-text">+$${(overageCredits / 100).toFixed(2)}</span>` }] : []),
+    { label: 'Days left', value: `${daysLeft}d`, mono: true },
+  ];
+
+  return `
+    <div class="mini-card">
+      <span class="card-title">Pace &amp; Projections</span>
+      <div class="pace-list">
+        ${rows.map(row => `
+          <div class="pace-row">
+            <span class="pace-key muted">${row.label}</span>
+            <span class="pace-val${row.mono ? ' mono' : ''}">${row.value}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderSessionTable(model: DetailViewModelSerialized, monthSessions: ChatSessionSerialized[]): string {
   const debugBanner = !model.agentDebugLogEnabled
     ? `<div class="session-banner"><span>Copilot agent debug logging is off. Enable it to collect future session detail.</span><button class="btn btn-sm" data-action="enableAgentDebugLog">Enable</button></div>`
     : '';
@@ -716,19 +823,48 @@ function renderSessionList(model: DetailViewModelSerialized): string {
     `;
   }
 
+  const topSessionId = monthSessions.length > 0
+    ? monthSessions.reduce((max, s) => s.estimatedCredits > max.estimatedCredits ? s : max, monthSessions[0]).id
+    : null;
+
+  const tableBody = monthSessions.length === 0
+    ? `<tr><td colspan="9" class="st-empty muted">No sessions in this time range. Try a wider lookback after debug logging has captured chat activity.</td></tr>`
+    : monthSessions.map(s => renderSessionRow(s, s.id === topSessionId)).join('');
+
   return `
     <section class="card session-list">
-      <div class="session-list-header">
-        <h2 class="card-title">Sessions</h2>
-        <span class="session-count"><span id="visible-session-count">${sessions.length}</span> session${sessions.length === 1 ? '' : 's'}</span>
+      <div class="st-header">
+        <div class="st-title-row">
+          <h2 class="card-title">Sessions <span class="session-count">(<span id="visible-session-count">${monthSessions.length}</span>)</span></h2>
+          <div class="st-legend">
+            <span class="st-leg"><span class="st-leg-dot" style="background:var(--token-in)"></span>input</span>
+            <span class="st-leg"><span class="st-leg-dot" style="background:var(--token-out)"></span>output</span>
+            <span class="st-leg"><span class="st-leg-dot" style="background:var(--token-cache)"></span>cached</span>
+          </div>
+        </div>
+        ${debugBanner}
+        ${monthSessions.length > 0 ? renderSessionFilters(model.sessions) : ''}
       </div>
-      ${debugBanner}
-      ${sessions.length > 0 ? renderSessionFilters(sessions) : ''}
-      ${sessions.length === 0 ? '<p class="muted">No sessions in this time range. Try a wider lookback after debug logging has captured chat activity.</p>' : `
-        <ul class="session-cards">
-          ${sessions.map(renderSessionCard).join('')}
-        </ul>
-      `}
+      <div class="session-table-wrap">
+        <table class="session-table">
+          <thead>
+            <tr>
+              <th class="td-l">Session</th>
+              <th class="td-c">Mode</th>
+              <th class="td-l">Models</th>
+              <th class="td-l">Tokens</th>
+              <th class="td-r">Turns</th>
+              <th class="td-r">Credits (AIC)</th>
+              <th class="td-r">Cost</th>
+              <th class="td-c">Log</th>
+              <th class="td-c expand-cell-head"></th>
+            </tr>
+          </thead>
+          <tbody class="session-tbody">
+            ${tableBody}
+          </tbody>
+        </table>
+      </div>
     </section>
   `;
 }
@@ -756,84 +892,238 @@ function renderSessionFilters(sessions: ChatSessionSerialized[]): string {
   `;
 }
 
-function renderSessionCard(session: ChatSessionSerialized): string {
+function renderSessionRow(session: ChatSessionSerialized, isTopSession: boolean): string {
   const tokenTotal = session.tokens.input + session.tokens.output + session.tokens.cached;
-  const models = session.models.length > 0 ? session.models : ['unknown'];
   const isLive = Date.now() - session.lastTurnAt < 120_000;
-  const modelSummary = summarizeSessionModels(session);
+  const models = session.models.length > 0 ? session.models : ['unknown'];
+
+  const inputPct = tokenTotal > 0 ? (session.tokens.input / tokenTotal) * 100 : 0;
+  const outputPct = tokenTotal > 0 ? (session.tokens.output / tokenTotal) * 100 : 0;
+  const cachePct = tokenTotal > 0 ? (session.tokens.cached / tokenTotal) * 100 : 0;
+
+  const tokenBarTitle = `${formatNumber(session.tokens.input)} in · ${formatNumber(session.tokens.output)} out · ${formatNumber(session.tokens.cached)} cached`;
+  const tokenBar = `
+    <div class="token-bar" title="${esc(tokenBarTitle)}">
+      <div class="token-seg" style="width:${inputPct.toFixed(1)}%;background:var(--token-in)"></div>
+      <div class="token-seg" style="width:${outputPct.toFixed(1)}%;background:var(--token-out)"></div>
+      <div class="token-seg" style="width:${cachePct.toFixed(1)}%;background:var(--token-cache)"></div>
+    </div>
+  `;
+
+  const modelChips = models.slice(0, 2).map(m => {
+    const color = modelColor(m);
+    return `<span class="model-chip"><span class="model-chip-dot" style="background:${color}"></span>${esc(humanizeModelName(m))}</span>`;
+  }).join('');
+  const moreChip = models.length > 2 ? `<span class="model-chip model-chip-more">+${models.length - 2}</span>` : '';
+  const credClass = session.estimatedCredits >= 1000 ? 'crit-text' : session.estimatedCredits >= 500 ? 'warn-text' : '';
 
   return `
-    <li class="session-card" data-session-id="${esc(session.id)}" data-last="${session.lastTurnAt}" data-workspace="${esc(session.workspaceName)}" data-models="${esc(models.join('|'))}">
-      <div class="session-card-header">
-        <button type="button" class="session-summary" data-session-expand="${esc(session.id)}">
-          <span class="session-row-main">
-            ${isLive ? '<span class="live-dot" title="Live"></span>' : ''}
-            <span>${esc(relativeTime(session.lastTurnAt))}</span>
-            <span class="dot">·</span>
-            <span>${esc(session.workspaceName)}</span>
-            <span class="dot">·</span>
-            <span class="mode-pill mode-${session.mode}">${esc(session.mode)}</span>
-            <span class="dot">·</span>
-            <span>${esc(modelSummary)}</span>
-            <span class="expand-arrow">▾</span>
-          </span>
-          <span class="session-row-sub mono">
-            ${formatNumber(tokenTotal)} tokens · ${session.turnCount} turn${session.turnCount === 1 ? '' : 's'} · ${formatCreditsValue(session.estimatedCredits)} cr ($${session.estimatedDollars.toFixed(2)} est.)
-          </span>
-        </button>
-        <button type="button" class="btn btn-ghost btn-sm session-source-btn" data-open-session-source="${esc(session.id)}" ${session.sourceAvailable === false ? 'disabled' : ''} title="Open the local Copilot log file for this session">Open log</button>
-      </div>
-      <div class="session-detail" hidden>
-        ${renderSessionDetail(session)}
-      </div>
-    </li>
+    <tr class="session-row"
+      data-session-id="${esc(session.id)}"
+      data-last="${session.lastTurnAt}"
+      data-workspace="${esc(session.workspaceName)}"
+      data-models="${esc(models.join('|'))}"
+      role="button" tabindex="0" aria-expanded="false">
+      <td class="td-l">
+        ${isLive ? '<span class="live-dot" title="Live"></span> ' : ''}${esc(relativeTime(session.lastTurnAt))}<span class="muted" style="font-size:0.82em"> · ${esc(session.workspaceName)}</span>
+      </td>
+      <td class="td-c"><span class="mode-pill mode-${session.mode}">${esc(session.mode)}</span></td>
+      <td class="td-l"><div class="model-chips">${modelChips}${moreChip}</div></td>
+      <td class="td-l">
+        <span class="mono muted" style="font-size:0.8em">${formatNumber(tokenTotal)}</span>
+        ${tokenBar}
+      </td>
+      <td class="td-r mono">${session.turnCount}</td>
+      <td class="td-r mono ${credClass}">${formatCreditsValue(session.estimatedCredits)}</td>
+      <td class="td-r mono muted">$${session.estimatedDollars.toFixed(2)}</td>
+      <td class="td-c" data-no-toggle>
+        <button type="button" class="btn btn-ghost btn-sm" data-open-session-source="${esc(session.id)}" ${session.sourceAvailable === false ? 'disabled' : ''} title="Open log">Log</button>
+      </td>
+      <td class="td-c expand-cell">
+        <button type="button" class="expand-btn" aria-label="Expand session detail">›</button>
+      </td>
+    </tr>
+    <tr class="detail-row" hidden>
+      <td colspan="9" class="detail-cell">
+        ${renderExpandedDetail(session, isTopSession)}
+      </td>
+    </tr>
   `;
 }
 
-function renderSessionDetail(session: ChatSessionSerialized): string {
-  const tools = Object.entries(session.toolCallSummary)
-    .sort((left, right) => right[1] - left[1])
-    .map(([name, count]) => `${esc(name)} (${count})`)
-    .join(' · ');
+function renderExpandedDetail(session: ChatSessionSerialized, isTopSession: boolean): string {
+  const rows = getSessionModelRows(session);
+  const totalCredits = rows.reduce((sum, r) => sum + r.credits, 0);
+  const duration = Math.max(0, Math.round((session.lastTurnAt - session.startedAt) / 60_000));
+  const avgPerTurn = session.turnCount > 0 ? totalCredits / session.turnCount : 0;
+  const tokenTotal = session.tokens.input + session.tokens.output + session.tokens.cached;
+  const hasModelUsage = !!session.modelUsage && Object.keys(session.modelUsage).length > 0;
+  const pills = renderInsightPills(session, rows, isTopSession);
+
+  return `
+    <div class="detail-panel">
+      ${pills ? `<div class="insight-pills">${pills}</div>` : ''}
+      <div class="detail-quickstats">
+        <div class="dqs-item"><span class="dqs-val mono">${formatCreditsValue(totalCredits)}</span><span class="dqs-key">AIC</span></div>
+        <div class="dqs-item"><span class="dqs-val mono">$${session.estimatedDollars.toFixed(2)}</span><span class="dqs-key">cost</span></div>
+        <div class="dqs-item"><span class="dqs-val mono">${formatNumber(tokenTotal)}</span><span class="dqs-key">tokens</span></div>
+        <div class="dqs-item"><span class="dqs-val mono">${session.turnCount}</span><span class="dqs-key">turns</span></div>
+        <div class="dqs-item"><span class="dqs-val mono">${duration}m</span><span class="dqs-key">duration</span></div>
+        <div class="dqs-item"><span class="dqs-val mono">${session.subAgentCount}</span><span class="dqs-key">sub-agents</span></div>
+        <div class="dqs-item"><span class="dqs-val mono">${formatCreditsValue(avgPerTurn)}</span><span class="dqs-key">AIC/turn</span></div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-section">
+          <div class="detail-section-title">Model Breakdown</div>
+          ${!hasModelUsage ? '<p class="muted" style="font-size:0.82em;margin-bottom:8px">Partial data — no per-model breakdown.</p>' : ''}
+          ${renderModelDetailTable(rows, totalCredits)}
+          ${renderTokenCompositionBar(session.tokens)}
+          ${renderCacheInsight(session.tokens)}
+        </div>
+        <div class="detail-section">
+          <div class="detail-section-title">Tool Calls</div>
+          ${renderToolCallChart(session.toolCallSummary)}
+          ${session.subAgentCount > 0 ? `<div class="subagent-banner">🤖 ${session.subAgentCount} sub-agent${session.subAgentCount === 1 ? '' : 's'} spawned</div>` : ''}
+          <div class="detail-section-title" style="margin-top:14px">Session Info</div>
+          ${renderMetaGrid(session, duration, avgPerTurn)}
+        </div>
+      </div>
+      <div class="detail-footer">
+        <span class="muted" style="font-size:0.78em">Local estimate · Copilot agent logs</span>
+        <button type="button" class="btn btn-ghost btn-sm" data-no-toggle data-open-session-source="${esc(session.id)}" ${session.sourceAvailable === false ? 'disabled' : ''}>Open log file ↗</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderInsightPills(session: ChatSessionSerialized, rows: SessionModelRow[], isTopSession: boolean): string {
+  const pills: string[] = [];
+  const totalCredits = rows.reduce((sum, r) => sum + r.credits, 0);
+  const tokenTotal = session.tokens.input + session.tokens.output + session.tokens.cached;
   const duration = Math.max(0, Math.round((session.lastTurnAt - session.startedAt) / 60_000));
 
+  if (rows.length > 0 && totalCredits > 0) {
+    const topPct = Math.round((rows[0].credits / totalCredits) * 100);
+    if (topPct >= 60) {
+      pills.push(`<span class="insight-pill ip-orange">${esc(humanizeModelName(rows[0].modelId))} drove ${topPct}% of cost</span>`);
+    }
+  }
+  if (tokenTotal >= 5_000 && session.tokens.cached / tokenTotal >= 0.50) {
+    pills.push(`<span class="insight-pill ip-green">${Math.round((session.tokens.cached / tokenTotal) * 100)}% tokens were cached</span>`);
+  }
+  if (isTopSession && totalCredits >= 500) {
+    pills.push(`<span class="insight-pill ip-red">Top session in cycle</span>`);
+  }
+  if (session.subAgentCount >= 3) {
+    pills.push(`<span class="insight-pill ip-purple">${session.subAgentCount} sub-agents spawned</span>`);
+  }
+  if (duration >= 60) {
+    pills.push(`<span class="insight-pill ip-blue">${duration} min session</span>`);
+  }
+  return pills.slice(0, 3).join('');
+}
+
+function renderModelDetailTable(rows: SessionModelRow[], totalCredits: number): string {
+  if (rows.length === 0) { return ''; }
+  const tableRows = rows.map(row => {
+    const credPct = totalCredits > 0 ? Math.round((row.credits / totalCredits) * 100) : 0;
+    const color = modelColor(row.modelId);
+    return `
+      <tr>
+        <td class="mdt-model"><span class="model-chip-dot" style="background:${color};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;flex-shrink:0"></span>${esc(humanizeModelName(row.modelId))}</td>
+        <td class="td-r mono muted">${formatNumber(row.inputTokens)}</td>
+        <td class="td-r mono muted">${formatNumber(row.outputTokens)}</td>
+        <td class="td-r mono muted">${formatNumber(row.cachedTokens)}</td>
+        <td class="td-r mono muted">${row.requestCount}</td>
+        <td class="td-r mono">${formatCreditsValue(row.credits)} <span class="muted" style="font-size:0.8em">(${credPct}%)</span></td>
+      </tr>
+    `;
+  }).join('');
   return `
-    ${renderSessionModelUsage(session)}
-    <dl>
-      <dt>Tool calls</dt><dd>${tools || '—'}</dd>
-      <dt>Sub-agents</dt><dd>${session.subAgentCount}</dd>
-      <dt>Tokens</dt><dd>${formatNumber(session.tokens.input)} in · ${formatNumber(session.tokens.output)} out · ${formatNumber(session.tokens.cached)} cached</dd>
-      <dt>Duration</dt><dd>${duration} min</dd>
-    </dl>
+    <table class="model-detail-table">
+      <thead><tr>
+        <th class="td-l">Model</th>
+        <th class="td-r">In</th>
+        <th class="td-r">Out</th>
+        <th class="td-r">Cached</th>
+        <th class="td-r">Req</th>
+        <th class="td-r">Credits (AIC)</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
   `;
 }
 
-function renderSessionModelUsage(session: ChatSessionSerialized): string {
-  const rows = getSessionModelRows(session);
-  const totalCredits = rows.reduce((sum, row) => sum + row.credits, 0);
-  const totalTokens = rows.reduce((sum, row) => sum + row.inputTokens + row.outputTokens + row.cachedTokens, 0);
-
+function renderTokenCompositionBar(tokens: { input: number; output: number; cached: number }): string {
+  const total = tokens.input + tokens.output + tokens.cached;
+  if (total === 0) { return ''; }
+  const inputPct = Math.round((tokens.input / total) * 100);
+  const outputPct = Math.round((tokens.output / total) * 100);
+  const cachePct = 100 - inputPct - outputPct;
   return `
-    <div class="session-model-usage" aria-label="Model usage for this session">
-      <div class="session-detail-heading">Model usage</div>
-      ${rows.map(row => {
-        const rowTokens = row.inputTokens + row.outputTokens + row.cachedTokens;
-        const shareBase = totalCredits > 0 ? totalCredits : totalTokens;
-        const shareValue = totalCredits > 0 ? row.credits : rowTokens;
-        const width = shareBase > 0 ? Math.max(3, Math.min(100, (shareValue / shareBase) * 100)) : 0;
-        return `
-          <div class="session-model-row">
-            <div class="session-model-row-top">
-              <span class="session-model-name">${esc(humanizeModelName(row.modelId))}</span>
-              <span class="session-model-cost mono">${formatCreditsValue(row.credits)} cr · $${row.dollars.toFixed(2)}</span>
-            </div>
-            <div class="session-model-meter"><span style="width:${width.toFixed(1)}%"></span></div>
-            <div class="session-model-tokens mono">
-              ${formatNumber(row.inputTokens)} in · ${formatNumber(row.outputTokens)} out · ${formatNumber(row.cachedTokens)} cached · ${formatNumber(row.requestCount)} request${row.requestCount === 1 ? '' : 's'}
-            </div>
-          </div>
-        `;
-      }).join('')}
+    <div class="token-comp">
+      <div class="detail-section-title" style="margin-top:10px">Token Composition</div>
+      <div class="token-comp-bar">
+        <div style="width:${inputPct}%;background:var(--token-in)" title="Input: ${formatNumber(tokens.input)}"></div>
+        <div style="width:${outputPct}%;background:var(--token-out)" title="Output: ${formatNumber(tokens.output)}"></div>
+        <div style="width:${cachePct}%;background:var(--token-cache)" title="Cached: ${formatNumber(tokens.cached)}"></div>
+      </div>
+      <div class="token-comp-legend">
+        <span><span class="st-leg-dot" style="background:var(--token-in)"></span>${esc(formatNumber(tokens.input))} in (${inputPct}%)</span>
+        <span><span class="st-leg-dot" style="background:var(--token-out)"></span>${esc(formatNumber(tokens.output))} out (${outputPct}%)</span>
+        <span><span class="st-leg-dot" style="background:var(--token-cache)"></span>${esc(formatNumber(tokens.cached))} cached (${cachePct}%)</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderCacheInsight(tokens: { input: number; output: number; cached: number }): string {
+  const total = tokens.input + tokens.output + tokens.cached;
+  if (total === 0 || tokens.cached / total < 0.20) { return ''; }
+  const pct = Math.round((tokens.cached / total) * 100);
+  return `<div class="token-insight">💡 ${pct}% of tokens were served from cache — reduces cost vs. fresh input</div>`;
+}
+
+function renderToolCallChart(toolCallSummary: Record<string, number>): string {
+  const entries = Object.entries(toolCallSummary).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) {
+    return `<p class="muted" style="font-size:0.84em;margin-top:4px">No tool calls recorded.</p>`;
+  }
+  const top = entries.slice(0, 8);
+  const rest = entries.slice(8);
+  const maxCount = top[0][1];
+  const bars = top.map(([name, count]) => {
+    const barPct = maxCount > 0 ? Math.max(2, (count / maxCount) * 100) : 0;
+    return `
+      <div class="tool-row">
+        <span class="tool-name muted">${esc(name)}</span>
+        <div class="tool-bar-track"><div class="tool-bar-fill" style="width:${barPct.toFixed(1)}%"></div></div>
+        <span class="tool-count mono">${count}</span>
+      </div>
+    `;
+  }).join('');
+  const more = rest.length > 0
+    ? `<div class="tool-row tool-more"><span class="muted">+${rest.length} more (${rest.reduce((s, [, c]) => s + c, 0)} calls)</span></div>`
+    : '';
+  return `<div class="tool-chart">${bars}${more}</div>`;
+}
+
+function renderMetaGrid(session: ChatSessionSerialized, duration: number, avgPerTurn: number): string {
+  const fmt = (ts: number) => new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const editorLabel = session.editor === 'vscode-insiders' ? 'VS Code Insiders' : 'VS Code';
+  const items = [
+    ['Started', fmt(session.startedAt)],
+    ['Ended', fmt(session.lastTurnAt)],
+    ['Duration', `${duration} min`],
+    ['Editor', editorLabel],
+    ['Workspace', session.workspaceName],
+    ['Mode', session.mode],
+    ['Sub-agents', String(session.subAgentCount)],
+    ['Avg AIC/turn', formatCreditsValue(avgPerTurn)],
+  ];
+  return `
+    <div class="meta-grid">
+      ${items.map(([key, val]) => `<span class="meta-key muted">${key}</span><span class="meta-val mono">${esc(val)}</span>`).join('')}
     </div>
   `;
 }
@@ -1277,7 +1567,7 @@ function getSessionModelRows(session: ChatSessionSerialized): SessionModelRow[] 
 function summarizeSessionModels(session: ChatSessionSerialized): string {
   const rows = getSessionModelRows(session);
   if (rows.length === 0) { return 'Unknown model'; }
-  const top = rows.slice(0, 2).map(row => `${humanizeModelName(row.modelId)} ${formatCreditsValue(row.credits)} cr`);
+  const top = rows.slice(0, 2).map(row => `${humanizeModelName(row.modelId)} ${formatCreditsValue(row.credits)} AIC`);
   return rows.length > 2 ? `${top.join(' + ')} +${rows.length - 2}` : top.join(' + ');
 }
 
@@ -1371,6 +1661,7 @@ function bindBillingViewToggle(): void {
 
 function bindCreditsInteractions(): void {
   if (!root) { return; }
+
   root.querySelector<HTMLSelectElement>('#credits-month')?.addEventListener('change', event => {
     selectedCreditsMonth = (event.currentTarget as HTMLSelectElement).value;
     if (currentModel) { render(currentModel); }
@@ -1386,16 +1677,22 @@ function bindCreditsInteractions(): void {
     });
   });
 
-  root.querySelectorAll<HTMLButtonElement>('[data-session-expand]').forEach(button => {
-    button.addEventListener('click', () => {
-      const card = button.closest<HTMLElement>('.session-card');
-      const detail = card?.querySelector<HTMLElement>('.session-detail');
-      const arrow = button.querySelector<HTMLElement>('.expand-arrow');
-      if (!detail) { return; }
-      detail.hidden = !detail.hidden;
-      if (arrow) { arrow.textContent = detail.hidden ? '▾' : '▴'; }
+  // Delegated row toggle on tbody
+  const tbody = root.querySelector<HTMLElement>('.session-tbody');
+  if (tbody) {
+    tbody.addEventListener('click', event => {
+      const target = event.target as HTMLElement;
+      if (target.closest('[data-no-toggle]')) { return; }
+      const row = target.closest<HTMLTableRowElement>('tr.session-row');
+      if (row) { toggleRow(row); }
     });
-  });
+    tbody.addEventListener('keydown', event => {
+      const ke = event as KeyboardEvent;
+      if (ke.key !== 'Enter' && ke.key !== ' ') { return; }
+      const row = (ke.target as HTMLElement).closest<HTMLTableRowElement>('tr.session-row');
+      if (row) { ke.preventDefault(); toggleRow(row); }
+    });
+  }
 
   root.querySelectorAll<HTMLSelectElement>('[data-session-filter]').forEach(select => {
     select.addEventListener('change', applySessionFilters);
@@ -1415,6 +1712,17 @@ function bindCreditsInteractions(): void {
   applySessionFilters();
 }
 
+function toggleRow(row: HTMLTableRowElement): void {
+  const detailRow = row.nextElementSibling as HTMLTableRowElement | null;
+  if (!detailRow?.classList.contains('detail-row')) { return; }
+  const expanding = detailRow.hidden;
+  detailRow.hidden = !expanding;
+  row.classList.toggle('expanded', expanding);
+  row.setAttribute('aria-expanded', String(expanding));
+  const btn = row.querySelector<HTMLElement>('.expand-btn');
+  if (btn) { btn.classList.toggle('open', expanding); }
+}
+
 function applySessionFilters(): void {
   if (!root) { return; }
   const timeFilter = root.querySelector<HTMLSelectElement>('#filter-time')?.value ?? 'cycle';
@@ -1423,15 +1731,19 @@ function applySessionFilters(): void {
   const range = sessionTimeRange(timeFilter);
   let visibleCount = 0;
 
-  root.querySelectorAll<HTMLElement>('.session-card').forEach(card => {
-    const lastTurnAt = Number(card.dataset.last ?? 0);
-    const workspaceName = card.dataset.workspace ?? '';
-    const models = (card.dataset.models ?? '').split('|');
+  root.querySelectorAll<HTMLTableRowElement>('tr.session-row').forEach(row => {
+    const lastTurnAt = Number(row.dataset.last ?? 0);
+    const workspaceName = row.dataset.workspace ?? '';
+    const models = (row.dataset.models ?? '').split('|');
     const visible =
       lastTurnAt >= range.start && lastTurnAt < range.end &&
       (workspaceFilter === 'all' || workspaceName === workspaceFilter) &&
       (modelFilter === 'all' || models.includes(modelFilter));
-    card.hidden = !visible;
+    row.hidden = !visible;
+    const detailRow = row.nextElementSibling as HTMLTableRowElement | null;
+    if (detailRow?.classList.contains('detail-row')) {
+      detailRow.hidden = !visible || !row.classList.contains('expanded');
+    }
     if (visible) { visibleCount++; }
   });
 
