@@ -1,4 +1,5 @@
 .gitignore
+.claude/**
 .github/**
 .vscode/**
 node_modules/**
