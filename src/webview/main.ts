@@ -715,6 +715,20 @@ function renderCreditsMonthPicker(monthOptions: Array<{ value: string; label: st
   `;
 }
 
+function burnYTicks(maxDollars: number, count = 4): number[] {
+  if (maxDollars <= 0) return [0];
+  const rough = maxDollars / count;
+  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const frac = rough / pow;
+  const step = frac <= 1.5 ? pow : frac <= 3.5 ? 2 * pow : frac <= 7.5 ? 5 * pow : 10 * pow;
+  const ticks: number[] = [];
+  for (let v = 0; v <= maxDollars * 1.05 + step * 0.5; v = Math.round((v + step) * 1e9) / 1e9) {
+    ticks.push(v);
+    if (ticks.length > 8) break;
+  }
+  return ticks;
+}
+
 function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggregateSerialized | null, selectedMonth: string, officialCredits?: CreditsAggregateSerialized | null): string {
   const { startMs, endMs } = monthRangeFromKey(selectedMonth);
   const daysInMonth = Math.round((endMs - startMs) / 86_400_000);
@@ -727,38 +741,56 @@ function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggr
 
   const allowance = credits?.creditsAllowance ?? 0;
 
-  // Build cumulative per-day totals
+  // Cumulative totals (in AIC credits)
   const cumulativeByDay: number[] = [];
   let running = 0;
   for (const v of dailyTotals) { running += v; cumulativeByDay.push(running); }
   const totalUsed = running;
+  const lastDataIdx = dailyTotals.reduce((last, v, i) => v > 0 ? i : last, 0);
 
-  // Chart scale: peak is 5% above the max so bars never clip the top
-  const peak = Math.max(totalUsed, allowance) * 1.05 || 1;
-  // Usable bar height is 90% of the SVG (leave room at top for the allowance label)
-  const chartH = 90;
-  const barW = 100 / daysInMonth;
+  // Chart coordinate helpers — viewBox 0 0 100 100, preserveAspectRatio="none"
+  const padTop = 8;
+  const chartH = 100 - padTop;
+  const peak = Math.max(totalUsed, allowance > 0 ? allowance : 0) * 1.1 || 1;
+  const xOf = (i: number) => daysInMonth > 1 ? (i / (daysInMonth - 1)) * 100 : 50;
+  const yOf = (val: number) => padTop + chartH - (val / peak) * chartH;
+  // bottom% of SVG element that corresponds to a given AIC value
+  const bottomPctOf = (val: number) => (chartH * val / peak).toFixed(2);
 
-  const bars = cumulativeByDay.map((cum, i) => {
-    if (dailyTotals[i] === 0) { return ''; }   // only draw on days with usage
-    const h = (cum / peak) * chartH;
-    const isOver = allowance > 0 && cum > allowance;
-    const x = (i * barW).toFixed(2);
-    const w = (barW - 0.4).toFixed(2);
-    return `<rect x="${x}%" y="${(100 - h).toFixed(2)}%" width="${w}%" height="${h.toFixed(2)}%" fill="${isOver ? 'var(--crit)' : 'var(--accent)'}" rx="1"/>`;
+  // Build visible points
+  const pts = cumulativeByDay.slice(0, lastDataIdx + 1).map((cum, i) => [xOf(i), yOf(cum)] as [number, number]);
+  const ptStr = pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+  const first = pts[0], last = pts[pts.length - 1];
+  const areaD = `M${first[0].toFixed(2)},100 ${pts.map(([x, y]) => `L${x.toFixed(2)},${y.toFixed(2)}`).join(' ')} L${last[0].toFixed(2)},100 Z`;
+
+  const isOver = allowance > 0 && totalUsed > allowance;
+  const lineColor = isOver ? 'var(--crit)' : 'var(--accent)';
+
+  // Y-axis: dollar ticks (1 AIC = $0.01)
+  const peakDollars = peak / 100;
+  const yTicks = burnYTicks(peakDollars);
+  const fmtDollar = (d: number) => d === 0 ? '$0' : d < 1 ? `$${d.toFixed(2)}` : d < 10 ? `$${d.toFixed(1)}` : `$${d.toFixed(0)}`;
+
+  const gridLines = yTicks.filter(t => t > 0).map(t => {
+    const y = yOf(t * 100).toFixed(2);
+    return `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="var(--border)" stroke-width="0.5" vector-effect="non-scaling-stroke" opacity="0.6"/>`;
   }).join('');
 
-  // Allowance threshold line — rendered as an HTML overlay so it stays crisp
-  let allowanceOverlay = '';
-  if (allowance > 0 && allowance <= peak) {
-    const bottomPct = ((allowance / peak) * chartH).toFixed(2);
-    allowanceOverlay = `
-      <div class="burn-threshold" style="bottom:${bottomPct}%">
-        <span class="burn-threshold-label">${formatCreditsValue(allowance)} AIC</span>
-      </div>`;
-  }
+  const yAxisLabels = yTicks.map(t => {
+    return `<span class="burn-ylabel" style="bottom:${bottomPctOf(t * 100)}%">${fmtDollar(t)}</span>`;
+  }).join('');
 
-  // X-axis date labels
+  // Dashed allowance line
+  const allowanceLine = allowance > 0 && allowance < peak
+    ? `<line x1="0" y1="${yOf(allowance).toFixed(2)}" x2="100" y2="${yOf(allowance).toFixed(2)}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="2,2" opacity="0.8" vector-effect="non-scaling-stroke"/>`
+    : '';
+
+  // Allowance label overlay
+  const allowanceOverlay = allowance > 0 && allowance < peak
+    ? `<div class="burn-threshold" style="bottom:${bottomPctOf(allowance)}%"><span class="burn-threshold-label">${formatCreditsValue(allowance)} AIC</span></div>`
+    : '';
+
+  // X-axis ticks
   const tickDays = [0, 6, 13, 20, 27].filter(d => d < daysInMonth);
   if (tickDays[tickDays.length - 1] !== daysInMonth - 1) { tickDays.push(daysInMonth - 1); }
   const tickSet = new Set(tickDays);
@@ -766,36 +798,42 @@ function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggr
     tickSet.has(i) ? `<span>${i + 1}</span>` : '<span></span>',
   ).join('');
 
-  // Summary line below the chart
+  // Summary line
   const summaryParts = [`${formatCreditsValue(totalUsed)} AIC in session logs`];
   if (officialCredits && officialCredits.creditsUsed > 0 && Math.abs(officialCredits.creditsUsed - totalUsed) > 0.5) {
     summaryParts.push(`<span class="muted">${formatCreditsValue(officialCredits.creditsUsed)} AIC official</span>`);
   }
   if (allowance > 0) {
     const overBy = totalUsed - allowance;
-    if (overBy > 0) {
-      summaryParts.push(`<span class="crit-text">+${formatCreditsValue(overBy)} AIC over budget</span>`);
-    } else {
-      summaryParts.push(`<span class="ok-text">${formatCreditsValue(allowance - totalUsed)} AIC remaining</span>`);
-    }
+    summaryParts.push(overBy > 0
+      ? `<span class="crit-text">+${formatCreditsValue(overBy)} AIC over budget</span>`
+      : `<span class="ok-text">${formatCreditsValue(allowance - totalUsed)} AIC remaining</span>`);
   }
 
   return `
     <div class="card burn-card">
       <div class="burn-header">
-        <span class="card-title">Cumulative Burn <span class="burn-subtitle muted">(session logs)</span></span>
+        <span class="card-title">Cumulative Cost <span class="burn-subtitle muted">(session logs)</span></span>
         <div class="burn-legend">
-          <span class="burn-leg burn-leg-ok">within budget</span>
-          <span class="burn-leg burn-leg-over">over budget</span>
           ${allowance > 0 ? '<span class="burn-leg burn-leg-threshold">— budget limit</span>' : ''}
         </div>
       </div>
       <div class="burn-chart-wrap">
-        <svg class="burn-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Cumulative credit burn chart">${bars}</svg>
-        ${allowanceOverlay}
+        <div class="burn-yaxis">${yAxisLabels}</div>
+        <div class="burn-plot">
+          <svg class="burn-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Cumulative cost line chart">
+            ${gridLines}
+            ${allowanceLine}
+            <path d="${areaD}" fill="${lineColor}" fill-opacity="0.12"/>
+            <polyline points="${ptStr}" fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+          </svg>
+          ${allowanceOverlay}
+        </div>
       </div>
-      <div class="burn-axis" style="grid-template-columns:repeat(${daysInMonth},1fr)">${axisSpans}</div>
-      <div class="burn-summary muted">${summaryParts.join(' · ')}</div>
+      <div class="burn-xaxis-row">
+        <div class="burn-yaxis-spacer"></div>
+        <div class="burn-axis" style="grid-template-columns:repeat(${daysInMonth},1fr)">${axisSpans}</div>
+      </div>
     </div>
   `;
 }
@@ -1102,6 +1140,7 @@ function renderExpandedDetail(session: ChatSessionSerialized, isTopSession: bool
           <div class="detail-section-title">Model Breakdown</div>
           ${!hasModelUsage ? '<p class="muted" style="font-size:0.82em;margin-bottom:8px">Partial data — no per-model breakdown.</p>' : ''}
           ${renderModelDetailTable(rows, totalCredits)}
+          <hr class="detail-hr">
           ${renderTokenCompositionBar(session.tokens)}
           ${renderCacheInsight(session.tokens)}
         </div>
@@ -1174,9 +1213,10 @@ function renderModelDetailTable(rows: SessionModelRow[], totalCredits: number): 
     const labels = rows.map(row => {
       const pct = totalCredits > 0 ? Math.round((row.credits / totalCredits) * 100) : 0;
       const color = modelColor(row.modelId);
-      return `<span class="cs-label" style="color:${color}">${esc(humanizeModelName(row.modelId))} <span class="cs-pct">${pct}%</span></span>`;
+      return `<span class="cs-label" style="color:${color}"><span class="cs-swatch" style="background:${color}"></span>${esc(humanizeModelName(row.modelId))} <span class="cs-pct">${pct}%</span></span>`;
     }).join('');
     creditShareBar = `
+      <hr class="detail-hr">
       <div class="detail-section-title cs-title">Credit share by model</div>
       <div class="cs-bar">${segments}</div>
       <div class="cs-labels">${labels}</div>
@@ -1207,7 +1247,7 @@ function renderTokenCompositionBar(tokens: { input: number; output: number; cach
   const cachePct = 100 - inputPct - outputPct;
   return `
     <div class="token-comp">
-      <div class="detail-section-title" style="margin-top:10px">Token Composition</div>
+      <div class="detail-section-title">Token Composition</div>
       <div class="token-comp-bar">
         <div style="width:${inputPct}%;background:var(--token-in)" title="Input: ${formatNumber(tokens.input)}"></div>
         <div style="width:${outputPct}%;background:var(--token-out)" title="Output: ${formatNumber(tokens.output)}"></div>
