@@ -52,7 +52,7 @@ We are working on making it available on the VS Code Marketplace as well.
 ### Option 2: Install from the command line
 
 ```powershell
-code --install-extension path\to\copilot-usage-insights-1.7.1.vsix
+code --install-extension path\to\copilot-usage-insights-1.8.0.vsix
 ```
 
 If the `code` command is not available in your shell, install from the VS Code Extensions view instead.
@@ -90,7 +90,13 @@ If the `code` command is not available in your shell, install from the VS Code E
 - Separate quota cards for Chat, Completions, and Premium Interactions.
 - Account details including plan type, Chat status, MCP status, and membership date.
 - Optional billing summary, overage banner, and requests-by-model table.
-- AI Credits overview with official GitHub billing usage when available, plus local session-level estimates from Copilot agent debug logs.
+- AI Credits dashboard with a redesigned layout:
+  - **Status hero** — budget status badge, credits used, dollars spent, total tokens, and days left in cycle.
+  - **Cumulative burn chart** — daily spend bars that turn red once the allowance is crossed.
+  - **Credits by Model** — top 5 models with full-width proportional bars and an overflow row for any additional models.
+  - **Pace & Projections** — average daily rate, budget per day, month-end delta against allowance, and current overage cost.
+  - **Session table** — expandable rows with per-session model breakdown, credit share bar, token composition, tool call chart, and session metadata.
+- Official GitHub billing usage when available; falls back to local session estimates from Copilot agent debug logs.
 - Inline settings so most display options can be changed without leaving the dashboard.
 
 ## How It Works

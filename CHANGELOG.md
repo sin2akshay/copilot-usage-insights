@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.8.0
+
+### AI Credits dashboard redesign
+
+- Replaced the flat card layout with a structured two-column dashboard: a **Status Hero** at the top showing budget status badge, credits used, dollars spent, total tokens, and days left in cycle.
+- **Credits by Model** card now renders a two-line row per model — name and value on the first line, full-width proportional bar below — showing top 5 models with an overflow row (`+N more models · X AIC`) for the rest.
+- Model swatches changed from circles to rounded squares throughout the dashboard (mini-card, session detail table, and token composition legend).
+- Expanded model color palette from 6 to 10 well-spaced, distinct hues so models are easier to tell apart at a glance.
+- **Pace & Projections** card improved: clearer row labels, `AIC/day` suffix on rate rows, month-end projection now shows the delta against allowance (negative = over budget), overage cost reflects what has already been spent above the allowance, and subtle divider lines separate each row.
+- **Burn chart** shows daily cumulative spend; bars turn red once the cumulative total crosses the allowance. Chart subtitle and summary line clearly label data as coming from session logs.
+- **Session detail** panel now includes a **Credit share by model** proportional stacked bar (shown when a session used more than one model), with per-model percentage labels in matching colors.
+- Tool Calls chart uses a per-tool color palette (muted tones) instead of a single accent color, making it easier to scan.
+
+### Bug fixes and accuracy improvements
+
+- Fixed a data-source mismatch where the GitHub billing API's Premium Requests response was being misinterpreted as AI Credits. `fetchCreditsAggregate` now returns `null` when the API reports only `unitType: "requests"` items, so the dashboard correctly falls back to session-derived estimates until the June 2026 AI Credits transition.
+- Added Gemini model ID aliases in the log parser: `gemini-3-flash-preview` → `gemini-3-flash`, `gemini-3.1-pro-preview` → `gemini-3.1-pro`, `gemini-2.5-pro-preview` → `gemini-2.5-pro`. Sessions using preview-suffixed model IDs now get correct per-token pricing instead of the generic fallback rate.
+- When official API credits data is available, the burn chart and model card display a reconciliation note explaining the gap between session log totals and the official figure (other devices, pre-lookback activity).
+
 ## 1.7.1
 
 - Clarified GitHub sign-in wording across the README, status bar, and dashboard empty state so the extension now explains that VS Code may reuse an existing GitHub session or ask the user to authorize access for this extension.
