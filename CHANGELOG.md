@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.8.1
+
+- Replaced the cumulative burn bar chart with a smooth **line chart** showing estimated dollar cost over the billing period. The chart uses a filled area under the curve with a dashed budget-limit line, and a color change from accent to red once the allowance is exceeded.
+- Added a **Y-axis** to the line chart showing estimated dollar cost at 4–5 human-friendly tick values, with matching horizontal gridlines inside the plot area.
+- Removed the redundant AIC summary line that appeared below the chart x-axis.
+- Added colored rounded-square **swatches** before each model name in the Credit Share by Model section of session detail.
+- Fixed Token Composition legend icons not rendering — `display: inline-block` was missing so width/height were ignored by the browser.
+- Improved Token Composition legend spacing to match the Credit Share labels (increased gap between items, aligned each item as a flex row).
+- Tool Call chart bars now expand to fill the full available width rather than being capped at 100px.
+- Dashboard max-width increased from 840px to 1100px.
+- Added subtle horizontal dividers between Model Breakdown, Credit Share, and Token Composition sections in the session detail panel.
+
 ## 1.8.0
 
 ### AI Credits dashboard redesign

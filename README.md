@@ -52,7 +52,7 @@ We are working on making it available on the VS Code Marketplace as well.
 ### Option 2: Install from the command line
 
 ```powershell
-code --install-extension path\to\copilot-usage-insights-1.8.0.vsix
+code --install-extension path\to\copilot-usage-insights-1.8.1.vsix
 ```
 
 If the `code` command is not available in your shell, install from the VS Code Extensions view instead.
