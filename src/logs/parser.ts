@@ -288,8 +288,18 @@ function modelFromName(value: string | undefined): string | undefined {
   return parts.length > 1 ? parts.at(-1) : value;
 }
 
+const MODEL_ALIASES: Record<string, string> = {
+  'claude-3-5-sonnet': 'claude-3.7-sonnet',
+  'claude-3-7-sonnet': 'claude-3.7-sonnet',
+  'gemini-3-flash-preview': 'gemini-3-flash',
+  'gemini-3.1-pro-preview': 'gemini-3.1-pro',
+  'gemini-2.5-pro-preview': 'gemini-2.5-pro',
+};
+
 function normalizeModelId(value: string | undefined): string | undefined {
-  return value?.trim().toLowerCase();
+  if (!value) { return undefined; }
+  const normalized = value.trim().toLowerCase();
+  return MODEL_ALIASES[normalized] ?? normalized;
 }
 
 function hashPath(value: string): string {

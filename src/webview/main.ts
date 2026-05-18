@@ -179,13 +179,28 @@ const STATUS_BAR_GRAPHIC_MODES = [
   { value: 'rectangles', label: 'Rectangles',  desc: '▮▮▯▯' },
 ];
 
+const TOOL_COLORS = [
+  'hsl(172, 48%, 52%)',  // teal
+  'hsl(142, 42%, 52%)',  // green
+  'hsl(260, 42%, 64%)',  // violet
+  'hsl(35,  62%, 58%)',  // amber
+  'hsl(200, 52%, 58%)',  // sky-blue
+  'hsl(16,  58%, 58%)',  // orange
+  'hsl(330, 42%, 60%)',  // rose
+  'hsl(52,  55%, 54%)',  // gold
+];
+
 const MODEL_COLORS = [
-  'hsl(210, 70%, 55%)',
-  'hsl(150, 60%, 45%)',
-  'hsl(35, 85%, 55%)',
-  'hsl(280, 55%, 62%)',
-  'hsl(0, 65%, 60%)',
-  'hsl(190, 70%, 48%)',
+  'hsl(38,  92%, 56%)',  // amber        — index 0: top-credit model
+  'hsl(210, 80%, 60%)',  // blue
+  'hsl(260, 65%, 68%)',  // violet
+  'hsl(6,   72%, 62%)',  // coral-red
+  'hsl(172, 62%, 44%)',  // teal
+  'hsl(330, 65%, 62%)',  // rose
+  'hsl(88,  58%, 48%)',  // lime-green
+  'hsl(195, 78%, 54%)',  // sky
+  'hsl(24,  88%, 58%)',  // orange
+  'hsl(52,  82%, 52%)',  // gold-yellow
 ];
 
 const modelColorCache = new Map<string, string>();
@@ -825,7 +840,12 @@ function renderModelMiniCard(credits: CreditsAggregateSerialized | null, monthSe
   // Seed top model color from session breakdown
   if (displayModels[0]?.modelId) { modelColor(displayModels[0].modelId, true); }
 
-  const rows = displayModels.map(model => {
+  const TOP_N = 5;
+  const visibleModels = displayModels.slice(0, TOP_N);
+  const restModels = displayModels.slice(TOP_N);
+  const restCredits = restModels.reduce((s, m) => s + m.credits, 0);
+
+  const rows = visibleModels.map(model => {
     const pct = Math.round((model.credits / total) * 100);
     const barPct = Math.max(2, (model.credits / topCredits) * 100);
     const color = modelColor(model.modelId);
@@ -834,14 +854,19 @@ function renderModelMiniCard(credits: CreditsAggregateSerialized | null, monthSe
     const attrs = isFilterable ? ` type="button" data-filter-model="${esc(model.modelId)}" title="Filter sessions by this model"` : '';
     return `
       <${tag}${attrs} class="hbar-row${isFilterable ? ' hbar-row-btn' : ''}">
-        <span class="hbar-swatch" style="background:${color}"></span>
-        <span class="hbar-name">${esc(model.displayName)}</span>
+        <div class="hbar-header">
+          <span class="hbar-swatch" style="background:${color}"></span>
+          <span class="hbar-name">${esc(model.displayName)}</span>
+          <span class="hbar-meta muted">${formatCreditsValue(model.credits)} AIC · ${pct}%</span>
+        </div>
         <div class="hbar-track"><div class="hbar-fill" style="width:${barPct.toFixed(1)}%;background:${color}"></div></div>
-        <span class="hbar-pct mono">${pct}%</span>
-        <span class="hbar-val muted">${formatCreditsValue(model.credits)} AIC</span>
       </${tag}>
     `;
   }).join('');
+
+  const overflowRow = restModels.length > 0
+    ? `<div class="hbar-overflow muted">+${restModels.length} more model${restModels.length > 1 ? 's' : ''} · ${formatCreditsValue(restCredits)} AIC</div>`
+    : '';
 
   // Reconciliation note: explain gap between session logs and official total
   let reconcileNote = '';
@@ -856,6 +881,7 @@ function renderModelMiniCard(credits: CreditsAggregateSerialized | null, monthSe
     <div class="mini-card">
       <span class="card-title">Credits by Model</span>
       <div class="hbar-list">${rows}</div>
+      ${overflowRow}
       ${reconcileNote}
     </div>
   `;
@@ -871,25 +897,33 @@ function renderPaceCard(credits: CreditsAggregateSerialized | null, daysLeft: nu
   const daysInCycle = daysElapsed + daysLeft;
   const projected = avgPerDay * daysInCycle;
   const budgetPerDay = allowance > 0 ? allowance / daysInCycle : 0;
-  const overageCredits = Math.max(0, projected - allowance);
+  const overageCreditsNow = Math.max(0, used - allowance);
   const isOver = used > allowance && allowance > 0;
   const isProjectedOver = projected > allowance && allowance > 0;
+  const projectedDelta = allowance > 0 ? allowance - projected : null;
 
   type PaceRow = { label: string; value: string; mono?: boolean };
   const rows: PaceRow[] = [
-    { label: 'Status', value: isOver ? '<span class="crit-text">Over budget</span>' : isProjectedOver ? '<span class="warn-text">Projected over</span>' : '<span class="ok-text">On track</span>' },
-    { label: 'Avg / day', value: `${formatCreditsValue(avgPerDay)} AIC`, mono: true },
-    ...(allowance > 0 ? [{ label: 'Budget / day', value: `${formatCreditsValue(budgetPerDay)} AIC`, mono: true }] : []),
-    ...(allowance > 0 ? [{ label: 'Projected', value: `${formatCreditsValue(projected)} AIC${isProjectedOver ? ' <span class="crit-text">▲</span>' : ''}`, mono: true }] : []),
-    ...(isProjectedOver ? [{ label: 'Est. overage', value: `<span class="crit-text">+$${(overageCredits / 100).toFixed(2)}</span>` }] : []),
-    { label: 'Days left', value: `${daysLeft}d`, mono: true },
+    { label: 'Status', value: isOver ? '<span class="crit-text">▲ Over budget</span>' : isProjectedOver ? '<span class="warn-text">▲ Projected over</span>' : '<span class="ok-text">On track</span>' },
+    { label: 'Avg per day (so far)', value: `${formatCreditsValue(avgPerDay)} AIC/day`, mono: true },
+    ...(allowance > 0 ? [{ label: 'Budget per day', value: `${formatCreditsValue(budgetPerDay)} AIC/day`, mono: true }] : []),
+    ...(allowance > 0 ? [{
+      label: 'Month-end projection',
+      value: projectedDelta! < 0
+        ? `<span class="crit-text">${formatCreditsValue(projectedDelta!)} AIC</span>`
+        : `<span class="ok-text">+${formatCreditsValue(projectedDelta!)} AIC</span>`,
+      mono: true,
+    }] : []),
+    ...(isOver ? [{ label: 'Overage cost so far', value: `<span class="crit-text">$${(overageCreditsNow / 100).toFixed(2)}</span>` }] : []),
+    { label: 'Days left in cycle', value: `${daysLeft} days`, mono: true },
   ];
 
   return `
     <div class="mini-card">
       <span class="card-title">Pace &amp; Projections</span>
       <div class="pace-list">
-        ${rows.map(row => `
+        ${rows.map((row, i) => `
+          ${i > 0 ? '<div class="pace-divider"></div>' : ''}
           <div class="pace-row">
             <span class="pace-key muted">${row.label}</span>
             <span class="pace-val${row.mono ? ' mono' : ''}">${row.value}</span>
@@ -1121,7 +1155,7 @@ function renderModelDetailTable(rows: SessionModelRow[], totalCredits: number): 
     const color = modelColor(row.modelId);
     return `
       <tr>
-        <td class="mdt-model"><span class="model-chip-dot" style="background:${color};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;flex-shrink:0"></span>${esc(humanizeModelName(row.modelId))}</td>
+        <td class="mdt-model"><span class="mdt-swatch" style="background:${color}"></span>${esc(humanizeModelName(row.modelId))}</td>
         <td class="td-r mono muted">${formatNumber(row.inputTokens)}</td>
         <td class="td-r mono muted">${formatNumber(row.outputTokens)}</td>
         <td class="td-r mono muted">${formatNumber(row.cachedTokens)}</td>
@@ -1130,6 +1164,25 @@ function renderModelDetailTable(rows: SessionModelRow[], totalCredits: number): 
       </tr>
     `;
   }).join('');
+  let creditShareBar = '';
+  if (rows.length > 1) {
+    const segments = rows.map(row => {
+      const pct = totalCredits > 0 ? (row.credits / totalCredits) * 100 : 0;
+      const color = modelColor(row.modelId);
+      return `<div style="width:${pct.toFixed(1)}%;background:${color}" title="${esc(humanizeModelName(row.modelId))}: ${formatCreditsValue(row.credits)} AIC (${Math.round(pct)}%)"></div>`;
+    }).join('');
+    const labels = rows.map(row => {
+      const pct = totalCredits > 0 ? Math.round((row.credits / totalCredits) * 100) : 0;
+      const color = modelColor(row.modelId);
+      return `<span class="cs-label" style="color:${color}">${esc(humanizeModelName(row.modelId))} <span class="cs-pct">${pct}%</span></span>`;
+    }).join('');
+    creditShareBar = `
+      <div class="detail-section-title cs-title">Credit share by model</div>
+      <div class="cs-bar">${segments}</div>
+      <div class="cs-labels">${labels}</div>
+    `;
+  }
+
   return `
     <table class="model-detail-table">
       <thead><tr>
@@ -1142,6 +1195,7 @@ function renderModelDetailTable(rows: SessionModelRow[], totalCredits: number): 
       </tr></thead>
       <tbody>${tableRows}</tbody>
     </table>
+    ${creditShareBar}
   `;
 }
 
@@ -1183,12 +1237,13 @@ function renderToolCallChart(toolCallSummary: Record<string, number>): string {
   const top = entries.slice(0, 8);
   const rest = entries.slice(8);
   const maxCount = top[0][1];
-  const bars = top.map(([name, count]) => {
+  const bars = top.map(([name, count], i) => {
     const barPct = maxCount > 0 ? Math.max(2, (count / maxCount) * 100) : 0;
+    const color = TOOL_COLORS[i % TOOL_COLORS.length];
     return `
       <div class="tool-row">
         <span class="tool-name muted">${esc(name)}</span>
-        <div class="tool-bar-track"><div class="tool-bar-fill" style="width:${barPct.toFixed(1)}%"></div></div>
+        <div class="tool-bar-track"><div class="tool-bar-fill" style="width:${barPct.toFixed(1)}%;background:${color}"></div></div>
         <span class="tool-count mono">${count}</span>
       </div>
     `;

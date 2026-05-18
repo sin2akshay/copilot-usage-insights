@@ -724,31 +724,33 @@ a:hover { text-decoration: underline; }
 /* Horizontal bar list (model mini-card) */
 .hbar-list { display: flex; flex-direction: column; gap: 7px; }
 .hbar-row {
-  display: grid;
-  grid-template-columns: 10px minmax(0,1fr) 80px 32px 60px;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 4px 0;
   background: transparent;
   border: none;
   color: var(--fg);
   font: inherit;
   text-align: left;
+  width: 100%;
 }
-.hbar-row-btn { cursor: pointer; border-radius: var(--radius-sm); padding: 3px 4px; }
+.hbar-row-btn { cursor: pointer; border-radius: var(--radius-sm); padding: 4px 6px; }
 .hbar-row-btn:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
-.hbar-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.hbar-name { font-size: 0.84em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-header { display: flex; align-items: center; gap: 7px; }
+.hbar-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.hbar-name { font-size: 0.84em; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hbar-track { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--fg) 8%, transparent); overflow: hidden; }
 .hbar-fill { height: 100%; border-radius: inherit; }
-.hbar-pct { font-size: 0.8em; text-align: right; }
-.hbar-val { font-size: 0.75em; text-align: right; white-space: nowrap; }
+.hbar-meta { font-size: 0.78em; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.hbar-overflow { font-size: 0.78em; padding: 4px 2px 0; }
 
 .mini-card-note { font-size: 0.75em; line-height: 1.4; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--fg) 6%, transparent); }
 
 /* Pace card */
-.pace-list { display: flex; flex-direction: column; gap: 8px; }
-.pace-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 0.84em; }
+.pace-list { display: flex; flex-direction: column; }
+.pace-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 0.84em; padding: 10px 0; }
+.pace-divider { height: 1px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
 .pace-key { flex-shrink: 0; }
 .pace-val { font-weight: 600; }
 .ok-text { color: var(--ok); }
@@ -773,7 +775,7 @@ a:hover { text-decoration: underline; }
 .session-count { color: var(--muted); font-size: 0.82em; }
 .st-legend { display: flex; gap: 10px; }
 .st-leg { display: flex; align-items: center; gap: 4px; font-size: 0.75em; color: var(--muted); }
-.st-leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.st-leg-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .session-banner {
   display: flex;
   align-items: center;
@@ -977,6 +979,15 @@ a:hover { text-decoration: underline; }
   vertical-align: middle;
 }
 .mdt-model { display: flex; align-items: center; white-space: nowrap; }
+.mdt-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; margin-right: 7px; }
+
+/* Credit share by model */
+.cs-title { margin-top: 12px; }
+.cs-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 6px; gap: 1px; }
+.cs-bar div { height: 100%; }
+.cs-labels { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 7px; font-size: 0.78em; }
+.cs-label { display: flex; align-items: center; gap: 3px; font-weight: 500; }
+.cs-pct { opacity: 0.75; font-weight: 400; }
 
 /* Token composition */
 .token-comp { display: flex; flex-direction: column; gap: 6px; }
