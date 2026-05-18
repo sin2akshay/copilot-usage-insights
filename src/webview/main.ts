@@ -594,11 +594,15 @@ function renderCreditsView(model: DetailViewModelSerialized, updatedStr: string)
   const topModelId = credits?.byModel[0]?.modelId;
   if (topModelId) { modelColor(topModelId, true); }
 
+  // Only reconcile against official API data when viewing the current billing cycle
+  const isCurrentCycle = selectedMonth === currentCycleMonth;
+  const officialCredits = isCurrentCycle && model.credits?.source === 'github-api' ? model.credits : null;
+
   return `
     ${renderStatusHero(credits, monthSessions, updatedStr, daysLeft)}
-    ${renderBurnChart(monthSessions, credits, selectedMonth)}
+    ${renderBurnChart(monthSessions, credits, selectedMonth, officialCredits)}
     <div class="two-col">
-      ${renderModelMiniCard(credits, monthSessions)}
+      ${renderModelMiniCard(credits, monthSessions, officialCredits)}
       ${renderPaceCard(credits, daysLeft, daysElapsed)}
     </div>
     ${renderSessionTable(model, monthSessions)}
@@ -696,7 +700,7 @@ function renderCreditsMonthPicker(monthOptions: Array<{ value: string; label: st
   `;
 }
 
-function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggregateSerialized | null, selectedMonth: string): string {
+function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggregateSerialized | null, selectedMonth: string, officialCredits?: CreditsAggregateSerialized | null): string {
   const { startMs, endMs } = monthRangeFromKey(selectedMonth);
   const daysInMonth = Math.round((endMs - startMs) / 86_400_000);
   const dailyTotals = new Array<number>(daysInMonth).fill(0);
@@ -748,7 +752,10 @@ function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggr
   ).join('');
 
   // Summary line below the chart
-  const summaryParts = [`${formatCreditsValue(totalUsed)} AIC used`];
+  const summaryParts = [`${formatCreditsValue(totalUsed)} AIC in session logs`];
+  if (officialCredits && officialCredits.creditsUsed > 0 && Math.abs(officialCredits.creditsUsed - totalUsed) > 0.5) {
+    summaryParts.push(`<span class="muted">${formatCreditsValue(officialCredits.creditsUsed)} AIC official</span>`);
+  }
   if (allowance > 0) {
     const overBy = totalUsed - allowance;
     if (overBy > 0) {
@@ -761,7 +768,7 @@ function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggr
   return `
     <div class="card burn-card">
       <div class="burn-header">
-        <span class="card-title">Cumulative Burn</span>
+        <span class="card-title">Cumulative Burn <span class="burn-subtitle muted">(session logs)</span></span>
         <div class="burn-legend">
           <span class="burn-leg burn-leg-ok">within budget</span>
           <span class="burn-leg burn-leg-over">over budget</span>
@@ -799,7 +806,7 @@ function buildSessionModelBreakdown(sessions: ChatSessionSerialized[]): Array<{ 
     .sort((a, b) => b.credits - a.credits);
 }
 
-function renderModelMiniCard(credits: CreditsAggregateSerialized | null, monthSessions: ChatSessionSerialized[]): string {
+function renderModelMiniCard(credits: CreditsAggregateSerialized | null, monthSessions: ChatSessionSerialized[], officialCredits?: CreditsAggregateSerialized | null): string {
   // Prefer per-model data from session modelUsage (more granular than GitHub API aggregate)
   const sessionBreakdown = buildSessionModelBreakdown(monthSessions);
   const displayModels = sessionBreakdown.length > 0
@@ -810,7 +817,8 @@ function renderModelMiniCard(credits: CreditsAggregateSerialized | null, monthSe
     return `<div class="mini-card"><span class="card-title">Credits by Model</span><p class="muted" style="margin-top:8px">No model data yet.</p></div>`;
   }
 
-  const total = displayModels.reduce((s, m) => s + m.credits, 0) || 1;
+  const sessionTotal = displayModels.reduce((s, m) => s + m.credits, 0);
+  const total = sessionTotal || 1;
   const topCredits = displayModels[0].credits || 1;
   const sessionModelIds = new Set(monthSessions.flatMap(s => s.models));
 
@@ -834,10 +842,21 @@ function renderModelMiniCard(credits: CreditsAggregateSerialized | null, monthSe
       </${tag}>
     `;
   }).join('');
+
+  // Reconciliation note: explain gap between session logs and official total
+  let reconcileNote = '';
+  if (officialCredits && officialCredits.creditsUsed > 0 && Math.abs(officialCredits.creditsUsed - sessionTotal) > 0.5) {
+    const coveragePct = Math.min(100, Math.round((sessionTotal / officialCredits.creditsUsed) * 100));
+    reconcileNote = `<div class="mini-card-note muted">Session logs: ${formatCreditsValue(sessionTotal)} AIC (${coveragePct}% of ${formatCreditsValue(officialCredits.creditsUsed)} AIC official). Gap = other devices / pre-lookback activity.</div>`;
+  } else {
+    reconcileNote = '<div class="mini-card-note muted">From local session logs</div>';
+  }
+
   return `
     <div class="mini-card">
       <span class="card-title">Credits by Model</span>
       <div class="hbar-list">${rows}</div>
+      ${reconcileNote}
     </div>
   `;
 }

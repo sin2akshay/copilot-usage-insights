@@ -662,6 +662,7 @@ a:hover { text-decoration: underline; }
 /* ── Burn chart ── */
 .burn-card { gap: 10px; padding: 16px 20px; }
 .burn-header { display: flex; align-items: center; justify-content: space-between; }
+.burn-subtitle { font-size: 0.78em; font-weight: 400; }
 .burn-legend { display: flex; gap: 12px; }
 .burn-leg {
   display: flex; align-items: center; gap: 5px;
@@ -742,6 +743,8 @@ a:hover { text-decoration: underline; }
 .hbar-fill { height: 100%; border-radius: inherit; }
 .hbar-pct { font-size: 0.8em; text-align: right; }
 .hbar-val { font-size: 0.75em; text-align: right; white-space: nowrap; }
+
+.mini-card-note { font-size: 0.75em; line-height: 1.4; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--fg) 6%, transparent); }
 
 /* Pace card */
 .pace-list { display: flex; flex-direction: column; gap: 8px; }

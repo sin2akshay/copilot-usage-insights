@@ -59,6 +59,12 @@ export async function fetchCreditsAggregate(
   const data = (await response.json()) as { usageItems?: RawUsageItem[]; usage_items?: RawUsageItem[] };
   const items = data.usageItems ?? data.usage_items ?? [];
   const copilot = items.filter(item => !item.product || item.product.toLowerCase() === 'copilot');
+
+  // Return null if the API has no AI Credits items — this means the account is still on
+  // the Premium Requests plan. Returning null lets the caller fall back to session-derived data.
+  const hasCreditsItems = copilot.some(item => item.unitType?.toLowerCase().includes('credit'));
+  if (!hasCreditsItems) { return null; }
+
   const byModelMap = new Map<string, ModelBreakdown>();
 
   for (const item of copilot) {
