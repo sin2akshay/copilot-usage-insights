@@ -522,6 +522,12 @@ function renderHeader(
   isOffline: boolean,
   model: DetailViewModelSerialized,
 ): string {
+  let monthPicker = '';
+  if (model.activeBillingView === 'ai-credits') {
+    const monthOptions = getCreditsMonthOptions(model.credits, model.sessions);
+    const selectedMonth = normalizeSelectedCreditsMonth(monthOptions);
+    monthPicker = renderCreditsMonthPicker(monthOptions, selectedMonth);
+  }
   return `
     <header class="header">
       <div class="header-left">
@@ -536,6 +542,7 @@ function renderHeader(
         ${renderBillingViewToggle(model)}
       </div>
       <div class="header-actions">
+        ${monthPicker}
         <button class="btn btn-icon" data-action="refresh" title="Refresh">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.451 5.609l-.579-.939-1.068.812-.076.094a4.373 4.373 0 0 1 .554 1.9l.009.24A4.382 4.382 0 0 1 7.913 12.1a4.382 4.382 0 0 1-4.378-4.378A4.382 4.382 0 0 1 7.913 3.338c.554 0 1.085.103 1.571.291l.088.04V2.2l-.208-.065A5.557 5.557 0 0 0 7.913 1.9 5.536 5.536 0 0 0 1.784 7.722a6.129 6.129 0 0 0 6.129 6.128c3.382 0 6.128-2.746 6.128-6.128a6.09 6.09 0 0 0-.995-3.367l-.006-.01z"/><path d="M10.5 1.5L8.25 5h4.5L10.5 1.5z"/></svg>
         </button>
@@ -588,7 +595,7 @@ function renderCreditsView(model: DetailViewModelSerialized, updatedStr: string)
   if (topModelId) { modelColor(topModelId, true); }
 
   return `
-    ${renderStatusHero(credits, monthSessions, updatedStr, monthOptions, selectedMonth, daysLeft)}
+    ${renderStatusHero(credits, monthSessions, updatedStr, daysLeft)}
     ${renderBurnChart(monthSessions, credits, selectedMonth)}
     <div class="two-col">
       ${renderModelMiniCard(credits, monthSessions)}
@@ -603,24 +610,14 @@ function renderStatusHero(
   credits: CreditsAggregateSerialized | null,
   monthSessions: ChatSessionSerialized[],
   updatedStr: string,
-  monthOptions: Array<{ value: string; label: string }>,
-  selectedMonth: string,
   daysLeft: number,
 ): string {
-  const monthPicker = renderCreditsMonthPicker(monthOptions, selectedMonth);
-
   if (!credits) {
     return `
       <section class="card status-hero">
-        <div class="hero-header">
-          <div class="hero-header-left">
-            <h2 class="card-title">AI Credits</h2>
-            <p class="muted">updated ${esc(updatedStr)}</p>
-          </div>
-          <div class="hero-header-actions">
-            ${monthPicker}
-            <button class="btn btn-sm" data-action="refresh">Refresh</button>
-          </div>
+        <div class="hero-meta">
+          <span class="card-title">AI Credits</span>
+          <span class="hero-source muted">updated ${esc(updatedStr)}</span>
         </div>
         <div class="credits-empty">
           <strong>Credits data not yet available</strong>
@@ -651,19 +648,14 @@ function renderStatusHero(
 
   return `
     <section class="card status-hero ${isOver ? 'status-hero-over' : ''}">
-      <div class="hero-header">
-        <div class="hero-header-left">
-          <h2 class="card-title">AI Credits — ${esc(formatCycleRange(credits.cycleStart, credits.cycleEnd))}</h2>
-          <p class="muted">${esc(sourceText)} · updated ${esc(updatedStr)}</p>
-        </div>
-        <div class="hero-header-actions">
-          ${monthPicker}
-          <button class="btn btn-sm" data-action="refresh">Refresh</button>
-        </div>
+      <div class="hero-meta">
+        <span class="card-title">AI Credits — ${esc(formatCycleRange(credits.cycleStart, credits.cycleEnd))}</span>
+        <span class="hero-source muted">${esc(sourceText)} · updated ${esc(updatedStr)}</span>
       </div>
       <div class="hero-body">
-        <div class="hero-main">
-          <div class="hero-value mono">${formatCreditsValue(credits.creditsUsed)} <span class="hero-unit">AIC</span> used</div>
+        <div class="hero-left">
+          <div class="hero-status-badge ${statusClass}">${statusLabel}</div>
+          <div class="hero-value mono ${isOver ? 'crit-text' : pct >= 80 ? 'warn-text' : ''}">${formatCreditsValue(credits.creditsUsed)} <span class="hero-unit">AI Credits Used</span></div>
           ${credits.creditsAllowance > 0 ? `<div class="hero-allowance muted">of ${formatCreditsValue(credits.creditsAllowance)} AIC allowance</div>` : ''}
           <div class="hero-bar-wrap">
             <div class="hero-bar">
@@ -673,10 +665,10 @@ function renderStatusHero(
           </div>
           ${isOver ? `<div class="hero-overage crit-text">+${formatCreditsValue(overageCredits)} AIC over · +$${(overageCredits / 100).toFixed(2)} est.</div>` : ''}
         </div>
-        <div class="hero-stats">
+        <div class="hero-right">
           <div class="hero-stat">
             <span class="hero-stat-value mono">$${credits.dollarsSpent.toFixed(2)}</span>
-            <span class="hero-stat-label">Est. spent</span>
+            <span class="hero-stat-label">Est. Spent</span>
           </div>
           <div class="hero-stat">
             <span class="hero-stat-value mono">${tokenTotal > 0 ? formatNumber(tokenTotal) : '—'}</span>
@@ -684,9 +676,8 @@ function renderStatusHero(
           </div>
           <div class="hero-stat">
             <span class="hero-stat-value mono">${daysLeft}</span>
-            <span class="hero-stat-label">Days left</span>
+            <span class="hero-stat-label">Days Left</span>
           </div>
-          <div class="hero-status-badge ${statusClass}">${statusLabel}</div>
         </div>
       </div>
     </section>
@@ -719,10 +710,30 @@ function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggr
   const barW = 100 / daysInMonth;
   let cumulative = 0;
   const bars = dailyTotals.map((v, i) => {
+    if (v === 0) { cumulative += v; return ''; }
+    const prevCumulative = cumulative;
     cumulative += v;
-    const over = allowance > 0 && cumulative > allowance;
-    const h = (v / maxDay) * 100;
-    return `<rect x="${(i * barW).toFixed(2)}%" y="${(100 - h).toFixed(2)}%" width="${(barW - 0.4).toFixed(2)}%" height="${h.toFixed(2)}%" fill="${over ? 'var(--crit)' : 'var(--accent)'}" rx="1"/>`;
+    const x = (i * barW).toFixed(2);
+    const w = (barW - 0.4).toFixed(2);
+    const totalH = (v / maxDay) * 100;
+
+    if (allowance <= 0 || cumulative <= allowance) {
+      // Entirely within budget
+      return `<rect x="${x}%" y="${(100 - totalH).toFixed(2)}%" width="${w}%" height="${totalH.toFixed(2)}%" fill="var(--accent)" rx="1"/>`;
+    } else if (prevCumulative >= allowance) {
+      // Entirely over budget
+      return `<rect x="${x}%" y="${(100 - totalH).toFixed(2)}%" width="${w}%" height="${totalH.toFixed(2)}%" fill="var(--crit)" rx="1"/>`;
+    } else {
+      // Crossover day: blue portion at bottom, red portion on top
+      const blueCredits = allowance - prevCumulative;
+      const redCredits = cumulative - allowance;
+      const blueH = (blueCredits / maxDay) * 100;
+      const redH = (redCredits / maxDay) * 100;
+      return [
+        `<rect x="${x}%" y="${(100 - blueH).toFixed(2)}%" width="${w}%" height="${blueH.toFixed(2)}%" fill="var(--accent)" rx="1"/>`,
+        `<rect x="${x}%" y="${(100 - blueH - redH).toFixed(2)}%" width="${w}%" height="${redH.toFixed(2)}%" fill="var(--crit)" rx="1"/>`,
+      ].join('');
+    }
   }).join('');
 
   // X-axis: CSS grid with daysInMonth columns so ticks align exactly with bars
