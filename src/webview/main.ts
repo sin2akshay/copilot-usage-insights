@@ -591,7 +591,7 @@ function renderCreditsView(model: DetailViewModelSerialized, updatedStr: string)
     ${renderStatusHero(credits, monthSessions, updatedStr, monthOptions, selectedMonth, daysLeft)}
     ${renderBurnChart(monthSessions, credits, selectedMonth)}
     <div class="two-col">
-      ${renderModelMiniCard(credits, model.sessions)}
+      ${renderModelMiniCard(credits, monthSessions)}
       ${renderPaceCard(credits, daysLeft, daysElapsed)}
     </div>
     ${renderSessionTable(model, monthSessions)}
@@ -724,6 +724,16 @@ function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggr
     const h = (v / maxDay) * 100;
     return `<rect x="${(i * barW).toFixed(2)}%" y="${(100 - h).toFixed(2)}%" width="${(barW - 0.4).toFixed(2)}%" height="${h.toFixed(2)}%" fill="${over ? 'var(--crit)' : 'var(--accent)'}" rx="1"/>`;
   }).join('');
+
+  // X-axis: CSS grid with daysInMonth columns so ticks align exactly with bars
+  const tickDays = [0, 6, 13, 20, 27].filter(d => d < daysInMonth);
+  if (tickDays[tickDays.length - 1] !== daysInMonth - 1) { tickDays.push(daysInMonth - 1); }
+  // Each span sits in its grid column (1-indexed); non-tick columns are empty
+  const tickSet = new Set(tickDays);
+  const axisSpans = Array.from({ length: daysInMonth }, (_, i) =>
+    tickSet.has(i) ? `<span>${i + 1}</span>` : '<span></span>',
+  ).join('');
+
   return `
     <div class="card burn-card">
       <div class="burn-header">
@@ -734,18 +744,51 @@ function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggr
         </div>
       </div>
       <svg class="burn-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Daily credit burn chart">${bars}</svg>
+      <div class="burn-axis" style="grid-template-columns:repeat(${daysInMonth},1fr)">${axisSpans}</div>
     </div>
   `;
 }
 
-function renderModelMiniCard(credits: CreditsAggregateSerialized | null, allSessions: ChatSessionSerialized[]): string {
-  if (!credits || credits.byModel.length === 0) {
+function buildSessionModelBreakdown(sessions: ChatSessionSerialized[]): Array<{ modelId: string; displayName: string; credits: number }> {
+  const map = new Map<string, { displayName: string; credits: number }>();
+  for (const s of sessions) {
+    if (s.modelUsage && Object.keys(s.modelUsage).length > 0) {
+      for (const [modelId, usage] of Object.entries(s.modelUsage)) {
+        const entry = map.get(modelId);
+        if (entry) { entry.credits += usage.credits; }
+        else { map.set(modelId, { displayName: humanizeModelName(modelId), credits: usage.credits }); }
+      }
+    } else if (s.models[0]) {
+      const modelId = s.models[0];
+      const entry = map.get(modelId);
+      if (entry) { entry.credits += s.estimatedCredits; }
+      else { map.set(modelId, { displayName: humanizeModelName(modelId), credits: s.estimatedCredits }); }
+    }
+  }
+  return Array.from(map.entries())
+    .map(([modelId, d]) => ({ modelId, ...d }))
+    .sort((a, b) => b.credits - a.credits);
+}
+
+function renderModelMiniCard(credits: CreditsAggregateSerialized | null, monthSessions: ChatSessionSerialized[]): string {
+  // Prefer per-model data from session modelUsage (more granular than GitHub API aggregate)
+  const sessionBreakdown = buildSessionModelBreakdown(monthSessions);
+  const displayModels = sessionBreakdown.length > 0
+    ? sessionBreakdown
+    : (credits?.byModel ?? []);
+
+  if (displayModels.length === 0) {
     return `<div class="mini-card"><span class="card-title">Credits by Model</span><p class="muted" style="margin-top:8px">No model data yet.</p></div>`;
   }
-  const total = credits.creditsUsed || 1;
-  const topCredits = credits.byModel[0].credits || 1;
-  const sessionModelIds = new Set(allSessions.flatMap(s => s.models));
-  const rows = credits.byModel.map(model => {
+
+  const total = displayModels.reduce((s, m) => s + m.credits, 0) || 1;
+  const topCredits = displayModels[0].credits || 1;
+  const sessionModelIds = new Set(monthSessions.flatMap(s => s.models));
+
+  // Seed top model color from session breakdown
+  if (displayModels[0]?.modelId) { modelColor(displayModels[0].modelId, true); }
+
+  const rows = displayModels.map(model => {
     const pct = Math.round((model.credits / total) * 100);
     const barPct = Math.max(2, (model.credits / topCredits) * 100);
     const color = modelColor(model.modelId);
@@ -1564,12 +1607,6 @@ function getSessionModelRows(session: ChatSessionSerialized): SessionModelRow[] 
   }];
 }
 
-function summarizeSessionModels(session: ChatSessionSerialized): string {
-  const rows = getSessionModelRows(session);
-  if (rows.length === 0) { return 'Unknown model'; }
-  const top = rows.slice(0, 2).map(row => `${humanizeModelName(row.modelId)} ${formatCreditsValue(row.credits)} AIC`);
-  return rows.length > 2 ? `${top.join(' + ')} +${rows.length - 2}` : top.join(' + ');
-}
 
 function monthKeyFromIso(iso: string): string {
   return monthKeyFromTimestamp(new Date(iso).getTime());

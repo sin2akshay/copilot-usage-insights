@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import type { BillingData, BillingView, CreditsAggregate, ExtensionConfig, UsageData } from '../core/models';
+import type { BillingData, BillingView, CreditsAggregate, ExtensionConfig, TopSessionSummary, UsageData } from '../core/models';
 
 const PREMIUM_REQUEST_UNIT_PRICE = 0.04;
 
@@ -63,9 +63,11 @@ export class StatusBar implements vscode.Disposable {
     activeBillingView: BillingView = 'premium-requests',
     credits: CreditsAggregate | null = null,
     isCreditsPreview = false,
+    planName?: string,
+    topSessions?: TopSessionSummary[],
   ): void {
     if (activeBillingView === 'ai-credits') {
-      this.showCreditsData(config, lastUpdatedAt, isOffline, isRateLimited, credits, isCreditsPreview);
+      this.showCreditsData(config, lastUpdatedAt, isOffline, isRateLimited, credits, isCreditsPreview, planName, topSessions);
       return;
     }
 
@@ -123,11 +125,13 @@ export class StatusBar implements vscode.Disposable {
     isRateLimited: boolean,
     credits: CreditsAggregate | null,
     isCreditsPreview: boolean,
+    planName?: string,
+    topSessions?: TopSessionSummary[],
   ): void {
     const staleIcon = isOffline ? ' $(warning)' : '';
     const previewSuffix = isCreditsPreview ? ' (preview)' : '';
     this.item.text = `${renderCreditsStatusBarText(credits, config)}${previewSuffix}${staleIcon}`;
-    this.item.tooltip = this.buildCreditsTooltip(credits, lastUpdatedAt, isRateLimited, isOffline, isCreditsPreview);
+    this.item.tooltip = this.buildCreditsTooltip(credits, lastUpdatedAt, isRateLimited, isOffline, isCreditsPreview, planName, topSessions);
     this.item.command = 'copilotUsageInsights.openDetails';
 
     let color: vscode.ThemeColor | undefined;
@@ -149,34 +153,113 @@ export class StatusBar implements vscode.Disposable {
     isRateLimited: boolean,
     isStale: boolean,
     isCreditsPreview: boolean,
+    planName?: string,
+    topSessions?: TopSessionSummary[],
   ): vscode.MarkdownString {
     const md = new vscode.MarkdownString('', true);
     md.isTrusted = { enabledCommands: ['copilotUsageInsights.refresh', 'copilotUsageInsights.openDetails'] };
     md.supportHtml = true;
 
+    // Header
     md.appendMarkdown('$(copilot) · **AI Credits**');
+    if (planName) { md.appendMarkdown(` · ${escapeMarkdown(planName)}`); }
     if (isCreditsPreview) { md.appendMarkdown(' · preview'); }
     md.appendMarkdown('\n\n');
 
     if (!credits) {
       md.appendMarkdown('Credits data is not available yet.\n\n');
     } else {
+      const now = Date.now();
+      const cycleStartMs = new Date(credits.cycleStart).getTime();
+      const cycleEndMs = new Date(credits.cycleEnd).getTime();
+      const daysElapsed = Math.max(1, Math.ceil((now - cycleStartMs) / 86_400_000));
+      const daysLeft = Math.max(0, Math.ceil((cycleEndMs - now) / 86_400_000));
       const pct = credits.creditsAllowance > 0
         ? Math.round((credits.creditsUsed / credits.creditsAllowance) * 100)
         : 0;
+
+      // Status chip
+      if (credits.creditsAllowance > 0) {
+        if (credits.creditsUsed > credits.creditsAllowance) {
+          md.appendMarkdown('<span style="color:#f85149;">$(error) Over budget</span>\n\n');
+        } else if (pct >= 80) {
+          md.appendMarkdown('<span style="color:#d29922;">$(warning) Approaching limit</span>\n\n');
+        } else {
+          md.appendMarkdown('<span style="color:#3fb950;">$(check) On track</span>\n\n');
+        }
+      }
+
+      // Cycle
       md.appendMarkdown(`**${formatCycle(credits.cycleStart, credits.cycleEnd)}**\n\n`);
-      md.appendMarkdown(`**${formatCredits(credits.creditsUsed)} / ${formatCredits(credits.creditsAllowance)}** credits used (**${pct}%**)\n\n`);
+
+      // Visual progress bar (12 segments)
+      if (credits.creditsAllowance > 0) {
+        const barWidth = 12;
+        const barPct = Math.min(100, pct);
+        const filled = barPct > 0 ? Math.max(1, Math.round((barPct / 100) * barWidth)) : 0;
+        const empty = Math.max(0, barWidth - filled);
+        const barColor = credits.creditsUsed > credits.creditsAllowance ? '#f85149' : pct >= 80 ? '#d29922' : '#3794ff';
+        md.appendMarkdown(
+          `<span style="color:${barColor};">${'▰'.repeat(filled)}</span>`
+          + `<span style="color:#585858;">${'▱'.repeat(empty)}</span>`
+          + '\n\n',
+        );
+      }
+
+      // Headline value
+      if (credits.creditsAllowance > 0) {
+        md.appendMarkdown(`**${formatCredits(credits.creditsUsed)} / ${formatCredits(credits.creditsAllowance)} AIC** used (**${pct}%**)\n\n`);
+      } else {
+        md.appendMarkdown(`**${formatCredits(credits.creditsUsed)} AIC** used · no allowance detected\n\n`);
+      }
+
+      // Cost + source
       md.appendMarkdown(`$${credits.dollarsSpent.toFixed(2)} spent`);
       md.appendMarkdown(credits.source === 'local-estimate' ? ' · local estimate' : ' · official from GitHub');
       md.appendMarkdown('\n\n');
 
+      // Pace / projection line
+      if (credits.creditsAllowance > 0) {
+        const avgPerDay = credits.creditsUsed / daysElapsed;
+        const projected = avgPerDay * (daysElapsed + daysLeft);
+        let paceLine = `$(dashboard) ~**${formatCredits(avgPerDay)} AIC/day** · ${daysLeft}d left · projected **${formatCredits(projected)} AIC**`;
+        if (projected > credits.creditsAllowance) {
+          const overageCredits = projected - credits.creditsAllowance;
+          const overageDollars = (overageCredits * 0.01).toFixed(2);
+          paceLine += ` · <span style="color:#f85149;">**+$${overageDollars}** over</span>`;
+        }
+        md.appendMarkdown(paceLine + '\n\n');
+      }
+
+      // By model (top 3)
       const topModels = credits.byModel.slice(0, 3);
       if (topModels.length > 0) {
         md.appendMarkdown('By model:\n');
         for (const model of topModels) {
-          md.appendMarkdown(`- ${escapeMarkdown(model.displayName)}: ${formatCredits(model.credits)} cr\n`);
+          const modelPct = credits.creditsUsed > 0
+            ? Math.round((model.credits / credits.creditsUsed) * 100)
+            : 0;
+          md.appendMarkdown(`- ${escapeMarkdown(model.displayName)}: ${formatCredits(model.credits)} AIC (${modelPct}%)\n`);
         }
         md.appendMarkdown('\n');
+      }
+
+      // Top sessions (conditional)
+      if (topSessions && topSessions.length > 0) {
+        md.appendMarkdown('Top sessions:\n');
+        for (const s of topSessions.slice(0, 3)) {
+          const relTime = formatRelativeTime(s.lastTurnAt);
+          md.appendMarkdown(`- ${relTime} · ${escapeMarkdown(s.workspaceShort)} · ${formatCredits(s.estimatedCredits)} AIC\n`);
+        }
+        md.appendMarkdown('\n');
+      }
+
+      // Cache efficiency hint (conditional)
+      const totalTokens = credits.byModel.reduce((sum, m) => sum + (m.inputTokens ?? 0) + (m.outputTokens ?? 0) + (m.cachedTokens ?? 0), 0);
+      const cachedTokens = credits.byModel.reduce((sum, m) => sum + (m.cachedTokens ?? 0), 0);
+      if (totalTokens >= 10_000 && cachedTokens / totalTokens >= 0.30) {
+        const cachePct = Math.round((cachedTokens / totalTokens) * 100);
+        md.appendMarkdown(`$(check) **${cachePct}%** of tokens were cached\n\n`);
       }
     }
 
@@ -345,13 +428,13 @@ export function renderCreditsStatusBarText(credits: CreditsAggregate | null, con
   switch (config.statusBarCreditsFormat) {
     case 'percent':
       if (credits.creditsAllowance <= 0) {
-        return credits.creditsUsed > 0 ? `Ⓒ ${formatCredits(credits.creditsUsed)} cr` : 'Ⓒ —%';
+        return credits.creditsUsed > 0 ? `Ⓒ ${formatCredits(credits.creditsUsed)} AIC` : 'Ⓒ —%';
       }
       return `Ⓒ ${Math.round((credits.creditsUsed / credits.creditsAllowance) * 100)}%`;
     case 'dollars':
       return `Ⓒ $${credits.dollarsSpent.toFixed(2)}`;
     case 'credits':
-      return `Ⓒ ${formatCredits(credits.creditsUsed)} cr`;
+      return `Ⓒ ${formatCredits(credits.creditsUsed)} AIC`;
     case 'used-over-allowance':
     default:
       return `Ⓒ ${formatCredits(credits.creditsUsed)} / ${formatCredits(credits.creditsAllowance)}`;
@@ -417,4 +500,14 @@ function formatCycle(startIso: string, endIso: string): string {
 
 function escapeMarkdown(text: string): string {
   return text.replace(/[\\`*_{}[\]()#!|]/g, '\\$&');
+}
+
+function formatRelativeTime(timestampMs: number): string {
+  const diffMs = Date.now() - timestampMs;
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 60) { return `${diffMin}m ago`; }
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) { return `${diffHr}h ago`; }
+  const diffDays = Math.floor(diffHr / 24);
+  return `${diffDays}d ago`;
 }

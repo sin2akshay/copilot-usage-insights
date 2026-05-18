@@ -4,7 +4,7 @@ import { fetchCreditsAggregate, sessionsToCreditsAggregate } from './billing/cre
 import { isPreviewMode, planInfoFromUsage, resolveView } from './billing/modeResolver';
 import { loadPricing } from './billing/pricing';
 import { getConfig } from './core/config';
-import type { BillingData, BillingView, ChatSession, CreditsAggregate, DetailViewModel, ExtensionConfig, PlanInfo, UsageData } from './core/models';
+import type { BillingData, BillingView, ChatSession, CreditsAggregate, DetailViewModel, ExtensionConfig, PlanInfo, TopSessionSummary, UsageData } from './core/models';
 import * as auth from './github/auth';
 import { fetchBillingUsage, fetchUsage } from './github/usageReports';
 import { getWorkspaceStorageRoots } from './logs/discovery';
@@ -225,7 +225,8 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
       if (lastData) {
         const config = getConfig();
         const activeBillingView = getResolvedBillingView(lastData, config);
-        statusBar.showData(lastData, config, lastUpdatedAt, false, true, lastBillingData, activeBillingView, lastCreditsAggregate, activeBillingView === 'ai-credits' && isPreviewMode());
+        const topSessions = activeBillingView === 'ai-credits' ? getTopSessions(lastSessions, lastCreditsAggregate) : undefined;
+        statusBar.showData(lastData, config, lastUpdatedAt, false, true, lastBillingData, activeBillingView, lastCreditsAggregate, activeBillingView === 'ai-credits' && isPreviewMode(), lastData.plan, topSessions);
       } else {
         statusBar.showError('Rate limited');
       }
@@ -252,9 +253,25 @@ async function refresh(promptSignIn = false, isManual = false): Promise<void> {
   }
 }
 
+function getTopSessions(sessions: ChatSession[], credits: CreditsAggregate | null): TopSessionSummary[] {
+  if (!credits) { return []; }
+  const cycleStart = new Date(credits.cycleStart).getTime();
+  const cycleEnd = new Date(credits.cycleEnd).getTime();
+  return sessions
+    .filter(s => s.lastTurnAt >= cycleStart && s.lastTurnAt < cycleEnd)
+    .sort((a, b) => b.estimatedCredits - a.estimatedCredits)
+    .slice(0, 3)
+    .map(s => ({
+      workspaceShort: s.workspaceName.length > 20 ? s.workspaceName.slice(0, 18) + '…' : s.workspaceName,
+      lastTurnAt: s.lastTurnAt,
+      estimatedCredits: s.estimatedCredits,
+    }));
+}
+
 function updateStatusBar(data: UsageData): void {
   const config = getConfig();
   const activeBillingView = getResolvedBillingView(data, config);
+  const topSessions = activeBillingView === 'ai-credits' ? getTopSessions(lastSessions, lastCreditsAggregate) : undefined;
   statusBar.showData(
     data,
     config,
@@ -265,6 +282,8 @@ function updateStatusBar(data: UsageData): void {
     activeBillingView,
     lastCreditsAggregate,
     activeBillingView === 'ai-credits' && isPreviewMode(),
+    data.plan,
+    topSessions,
   );
 }
 

@@ -298,7 +298,7 @@ describe('renderCreditsStatusBarText', () => {
   });
 
   it('renders credits-only format', () => {
-    expect(renderCreditsStatusBarText(sampleCredits, { ...baseConfig, statusBarCreditsFormat: 'credits' })).toBe('Ⓒ 420 cr');
+    expect(renderCreditsStatusBarText(sampleCredits, { ...baseConfig, statusBarCreditsFormat: 'credits' })).toBe('Ⓒ 420 AIC');
   });
 
   it('renders empty credits state', () => {

@@ -676,6 +676,17 @@ a:hover { text-decoration: underline; }
 .burn-leg-ok::before { background: var(--accent); }
 .burn-leg-over::before { background: var(--crit); }
 .burn-svg { display: block; width: 100%; height: 56px; margin-top: 4px; }
+.burn-axis {
+  display: grid;
+  /* grid-template-columns set inline per render to match daysInMonth */
+  margin-top: 3px;
+}
+.burn-axis span {
+  font-size: 0.68em;
+  color: var(--muted);
+  text-align: center;
+  pointer-events: none;
+}
 
 /* ── Two-column mini cards ── */
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -1042,20 +1053,16 @@ a:hover { text-decoration: underline; }
   .key-stats { grid-template-columns: repeat(2, 1fr); }
   .quota-row { grid-template-columns: 1fr; }
   .info-grid { grid-template-columns: repeat(2, 1fr); }
-  .credits-totals { grid-template-columns: 1fr; }
-  .credits-header { flex-direction: column; }
-  .credits-header-actions { width: 100%; justify-content: stretch; }
+  /* AI Credits responsive */
+  .two-col { grid-template-columns: 1fr; }
+  .status-hero { flex-direction: column; gap: 10px; }
+  .hero-stats { flex-direction: row; flex-wrap: wrap; }
+  .session-table-wrap { overflow-x: auto; }
+  .session-table { min-width: 620px; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .session-filters { grid-template-columns: 1fr; }
   .month-picker { width: 100%; justify-content: space-between; }
   .month-picker select { flex: 1; min-width: 0; }
-  .credits-progress-meta { flex-direction: column; gap: 2px; }
-  .session-filters { grid-template-columns: 1fr; }
-  .legend-row { grid-template-columns: 12px minmax(0, 1fr); }
-  .legend-meta { grid-column: 2; white-space: normal; }
-  .session-card-header { grid-template-columns: 1fr; }
-  .session-source-btn { justify-self: flex-start; margin: 0 0 10px 14px; }
-  .session-row-main { flex-wrap: wrap; }
-  .session-model-row-top { flex-direction: column; align-items: flex-start; gap: 2px; }
-  .session-detail dl { grid-template-columns: 1fr; }
   .setting-row {
     flex-direction: column;
     align-items: flex-start;

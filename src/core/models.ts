@@ -98,6 +98,12 @@ export interface SessionModelUsage {
   requestCount: number;
 }
 
+export interface TopSessionSummary {
+  workspaceShort: string;
+  lastTurnAt: number;
+  estimatedCredits: number;
+}
+
 export interface ModelPricing {
   modelId: string;
   displayName: string;
