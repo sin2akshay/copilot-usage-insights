@@ -705,57 +705,75 @@ function renderBurnChart(sessions: ChatSessionSerialized[], credits: CreditsAggr
     if (idx >= 0 && idx < daysInMonth) { dailyTotals[idx] += s.estimatedCredits; }
   }
   if (!dailyTotals.some(v => v > 0)) { return ''; }
+
   const allowance = credits?.creditsAllowance ?? 0;
-  const maxDay = Math.max(...dailyTotals, 1);
+
+  // Build cumulative per-day totals
+  const cumulativeByDay: number[] = [];
+  let running = 0;
+  for (const v of dailyTotals) { running += v; cumulativeByDay.push(running); }
+  const totalUsed = running;
+
+  // Chart scale: peak is 5% above the max so bars never clip the top
+  const peak = Math.max(totalUsed, allowance) * 1.05 || 1;
+  // Usable bar height is 90% of the SVG (leave room at top for the allowance label)
+  const chartH = 90;
   const barW = 100 / daysInMonth;
-  let cumulative = 0;
-  const bars = dailyTotals.map((v, i) => {
-    if (v === 0) { cumulative += v; return ''; }
-    const prevCumulative = cumulative;
-    cumulative += v;
+
+  const bars = cumulativeByDay.map((cum, i) => {
+    if (dailyTotals[i] === 0) { return ''; }   // only draw on days with usage
+    const h = (cum / peak) * chartH;
+    const isOver = allowance > 0 && cum > allowance;
     const x = (i * barW).toFixed(2);
     const w = (barW - 0.4).toFixed(2);
-    const totalH = (v / maxDay) * 100;
-
-    if (allowance <= 0 || cumulative <= allowance) {
-      // Entirely within budget
-      return `<rect x="${x}%" y="${(100 - totalH).toFixed(2)}%" width="${w}%" height="${totalH.toFixed(2)}%" fill="var(--accent)" rx="1"/>`;
-    } else if (prevCumulative >= allowance) {
-      // Entirely over budget
-      return `<rect x="${x}%" y="${(100 - totalH).toFixed(2)}%" width="${w}%" height="${totalH.toFixed(2)}%" fill="var(--crit)" rx="1"/>`;
-    } else {
-      // Crossover day: blue portion at bottom, red portion on top
-      const blueCredits = allowance - prevCumulative;
-      const redCredits = cumulative - allowance;
-      const blueH = (blueCredits / maxDay) * 100;
-      const redH = (redCredits / maxDay) * 100;
-      return [
-        `<rect x="${x}%" y="${(100 - blueH).toFixed(2)}%" width="${w}%" height="${blueH.toFixed(2)}%" fill="var(--accent)" rx="1"/>`,
-        `<rect x="${x}%" y="${(100 - blueH - redH).toFixed(2)}%" width="${w}%" height="${redH.toFixed(2)}%" fill="var(--crit)" rx="1"/>`,
-      ].join('');
-    }
+    return `<rect x="${x}%" y="${(100 - h).toFixed(2)}%" width="${w}%" height="${h.toFixed(2)}%" fill="${isOver ? 'var(--crit)' : 'var(--accent)'}" rx="1"/>`;
   }).join('');
 
-  // X-axis: CSS grid with daysInMonth columns so ticks align exactly with bars
+  // Allowance threshold line — rendered as an HTML overlay so it stays crisp
+  let allowanceOverlay = '';
+  if (allowance > 0 && allowance <= peak) {
+    const bottomPct = ((allowance / peak) * chartH).toFixed(2);
+    allowanceOverlay = `
+      <div class="burn-threshold" style="bottom:${bottomPct}%">
+        <span class="burn-threshold-label">${formatCreditsValue(allowance)} AIC</span>
+      </div>`;
+  }
+
+  // X-axis date labels
   const tickDays = [0, 6, 13, 20, 27].filter(d => d < daysInMonth);
   if (tickDays[tickDays.length - 1] !== daysInMonth - 1) { tickDays.push(daysInMonth - 1); }
-  // Each span sits in its grid column (1-indexed); non-tick columns are empty
   const tickSet = new Set(tickDays);
   const axisSpans = Array.from({ length: daysInMonth }, (_, i) =>
     tickSet.has(i) ? `<span>${i + 1}</span>` : '<span></span>',
   ).join('');
 
+  // Summary line below the chart
+  const summaryParts = [`${formatCreditsValue(totalUsed)} AIC used`];
+  if (allowance > 0) {
+    const overBy = totalUsed - allowance;
+    if (overBy > 0) {
+      summaryParts.push(`<span class="crit-text">+${formatCreditsValue(overBy)} AIC over budget</span>`);
+    } else {
+      summaryParts.push(`<span class="ok-text">${formatCreditsValue(allowance - totalUsed)} AIC remaining</span>`);
+    }
+  }
+
   return `
     <div class="card burn-card">
       <div class="burn-header">
-        <span class="card-title">Daily Burn</span>
+        <span class="card-title">Cumulative Burn</span>
         <div class="burn-legend">
           <span class="burn-leg burn-leg-ok">within budget</span>
           <span class="burn-leg burn-leg-over">over budget</span>
+          ${allowance > 0 ? '<span class="burn-leg burn-leg-threshold">— budget limit</span>' : ''}
         </div>
       </div>
-      <svg class="burn-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Daily credit burn chart">${bars}</svg>
+      <div class="burn-chart-wrap">
+        <svg class="burn-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Cumulative credit burn chart">${bars}</svg>
+        ${allowanceOverlay}
+      </div>
       <div class="burn-axis" style="grid-template-columns:repeat(${daysInMonth},1fr)">${axisSpans}</div>
+      <div class="burn-summary muted">${summaryParts.join(' · ')}</div>
     </div>
   `;
 }
