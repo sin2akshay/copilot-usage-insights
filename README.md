@@ -109,7 +109,7 @@ This extension is distributed through GitHub Releases as a `.vsix` package.
 ### Option 2: Install from the command line
 
 ```powershell
-code --install-extension path\to\copilot-usage-insights-1.8.1.vsix
+code --install-extension path\to\copilot-usage-insights-1.8.2.vsix
 ```
 
 ## Quick Start

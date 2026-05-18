@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.8.2
+
+- Rewrote README to cover both the Premium Requests and AI Credits dashboards with accurate feature descriptions and screenshots.
+- Added dashboard screenshots for the AI Credits view, cumulative cost chart, and session detail panel.
+
 ## 1.8.1
 
 - Replaced the cumulative burn bar chart with a smooth **line chart** showing estimated dollar cost over the billing period. The chart uses a filled area under the curve with a dashed budget-limit line, and a color change from accent to red once the allowance is exceeded.
