@@ -69,6 +69,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void refresh(false, true);
     },
     openSessionSource: openSessionSource,
+    rebuildSessionCache: async () => {
+      await sessionCache.clear();
+      void refresh(false, true);
+    },
     updateSetting: (key: string, value: unknown) => {
       const allowedKeys = [
         'refreshIntervalMinutes',
@@ -126,6 +130,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       clearRecoveryTimer();
     }),
   );
+
+  // Show loading immediately so the status bar item is visible while cache builds
+  statusBar.showLoading();
 
   // First refresh — resolve any existing session silently without prompting on startup
   resetLogWatcher();

@@ -175,18 +175,30 @@ export function parseLogLine(rawLine: string): ParsedLogLine | null {
         stringValue(event.model ?? event.modelId ?? attrs?.model ?? attrs?.debugName) ??
         modelFromName(stringValue(event.name)),
       );
+      const rawInput = numberValue(getNested(event, ['usage', 'prompt_tokens']) ?? attrs?.inputTokens ?? attrs?.prompt_tokens ?? attrs?.input_tokens) ?? 0;
+      // OpenAI reports cached at usage.prompt_tokens_details.cached_tokens (or flattened to usage.cached_tokens in some contexts).
+      // Anthropic reports them separately in usage.cache_read_input_tokens — input_tokens already excludes cache reads.
+      const openAICachedNested = getNested(event, ['usage', 'prompt_tokens_details', 'cached_tokens']);
+      const openAICachedFlat = getNested(event, ['usage', 'cached_tokens']);
+      const anthropicCached = getNested(event, ['usage', 'cache_read_input_tokens']) ?? attrs?.cache_read_input_tokens;
+      const cachedTokens = numberValue(
+        anthropicCached ??
+        openAICachedNested ?? openAICachedFlat ??
+        attrs?.cachedTokens ?? attrs?.cached_tokens ?? attrs?.cache_tokens,
+      ) ?? 0;
+      // For OpenAI format, inputTokens/prompt_tokens is the TOTAL (cached + uncached) — subtract to avoid double-billing.
+      // Copilot debug logs (llm_request attrs) use this same convention: attrs.inputTokens includes attrs.cachedTokens.
+      // For Anthropic format, input_tokens is already non-cached (cache_read_input_tokens is separate).
+      const isOpenAIFormat = anthropicCached == null && (openAICachedNested != null || openAICachedFlat != null || attrs?.cachedTokens != null || attrs?.cached_tokens != null || attrs?.cache_tokens != null);
+      const inputTokens = isOpenAIFormat ? Math.max(0, rawInput - cachedTokens) : rawInput;
       return {
         type: 'usage',
         timestamp,
         metadataCharCount,
         model,
-        inputTokens: numberValue(getNested(event, ['usage', 'prompt_tokens']) ?? attrs?.inputTokens ?? attrs?.prompt_tokens ?? attrs?.input_tokens),
+        inputTokens,
         outputTokens: numberValue(getNested(event, ['usage', 'completion_tokens']) ?? attrs?.outputTokens ?? attrs?.completion_tokens ?? attrs?.output_tokens),
-        cachedTokens: numberValue(
-          getNested(event, ['usage', 'cache_read_input_tokens']) ??
-          getNested(event, ['usage', 'cached_tokens']) ??
-          attrs?.cachedTokens ?? attrs?.cached_tokens ?? attrs?.cache_tokens ?? attrs?.cache_read_input_tokens,
-        ),
+        cachedTokens,
         cacheWriteTokens: numberValue(
           getNested(event, ['usage', 'cache_creation_input_tokens']) ??
           getNested(event, ['usage', 'cache_write_tokens']) ??

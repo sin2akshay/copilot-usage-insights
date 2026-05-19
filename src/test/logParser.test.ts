@@ -36,7 +36,8 @@ describe('parseLogContent', () => {
     expect(session?.mode).toBe('agent');
     expect(session?.turnCount).toBe(1);
     expect(session?.models).toEqual(['gpt-5']);
-    expect(session?.tokens).toEqual({ input: 100, output: 50, cached: 10 });
+    // prompt_tokens (100) includes cached_tokens (10) in OpenAI format; non-cached input = 90
+    expect(session?.tokens).toEqual({ input: 90, output: 50, cached: 10 });
     expect(session?.toolCallSummary).toEqual({ read_file: 1 });
     expect(session?.subAgentCount).toBe(1);
   });
@@ -52,7 +53,8 @@ describe('parseLogContent', () => {
     const session = parseLogContent(content, '/tmp/current.jsonl');
     const serialized = JSON.stringify(session);
     expect(session?.models).toEqual(['gpt-5']);
-    expect(session?.tokens.input).toBe(200);
+    // inputTokens (200) includes cachedTokens (25) per Copilot telemetry convention — non-cached input = 175
+    expect(session?.tokens.input).toBe(175);
     expect(session?.toolCallSummary).toEqual({ grep_search: 1 });
     expect(serialized).not.toContain('SECRET_USER_REQUEST');
     expect(serialized).not.toContain('SECRET_ARGS');
@@ -89,7 +91,8 @@ describe('parseLogContent', () => {
 
     const session = parseLogContent(content, '/tmp/multi.jsonl');
     expect(session?.models).toEqual(['gpt-5', 'claude-3.7-sonnet']);
-    expect(session?.modelUsage?.['gpt-5'].inputTokens).toBe(200);
+    // gpt-5: inputTokens (200) includes cachedTokens (25) — non-cached stored as 175
+    expect(session?.modelUsage?.['gpt-5'].inputTokens).toBe(175);
     expect(session?.modelUsage?.['claude-3.7-sonnet'].outputTokens).toBe(125);
   });
 

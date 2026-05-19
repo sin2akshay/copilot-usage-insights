@@ -94,6 +94,22 @@ The session table reads metadata from VS Code Copilot agent debug logs on your l
 
 Enable debug logging with **Enable agent debug logging** in the dashboard, or by setting `github.copilot.advanced.debug.useNodeDebugger` in VS Code settings. The extension scans both Stable and Insiders workspace storage by default.
 
+### Cost calculation
+
+Token costs are calculated from the debug log fields `attrs.inputTokens`, `attrs.cachedTokens`, and `attrs.outputTokens` that the Copilot extension records for each model call. `inputTokens` is the total prompt size including the cached portion; `cachedTokens` is the subset served from cache. The extension charges:
+
+- `(inputTokens − cachedTokens)` at the model's standard input rate
+- `cachedTokens` at the model's cheaper cached rate (typically 10% of the input rate)
+- `outputTokens` at the model's output rate
+
+Rates are stored in a bundled `pricing.json` derived from [GitHub's published AI Credits pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing). Use the **pricing.overrides** setting to adjust rates for any model without waiting for an extension update.
+
+If session cost data looks wrong after a pricing change, use the **Rebuild** button in the AI Credits Settings section to wipe the local cache and re-parse all log files from scratch.
+
+### Known limitation — cross-month sessions
+
+Sessions are attributed to the month of their **last message**. A session started on April 29 with a final reply on May 2 appears entirely in May; April shows none of its cost. This means months with long-running cross-boundary sessions may look slightly cheaper or more expensive than the true spend for that calendar month.
+
 ## Install
 
 This extension is distributed through GitHub Releases as a `.vsix` package.
@@ -204,7 +220,7 @@ Combine any text mode with any graphic mode. `statusBarTextPosition` controls wh
 | `showCostInStatusBar` | `false` | Append billed amount (e.g. `· $1.20`) to the status bar when billing data is available |
 | `localLogs.enabled` | `true` | Read local Copilot agent debug logs for session-level AI Credits estimates |
 | `localLogs.includeInsiders` | `true` | Also scan VS Code Insiders workspace storage |
-| `localLogs.lookbackDays` | `35` | Maximum age of sessions included in the AI Credits dashboard |
+| `localLogs.lookbackDays` | `60` | How many days of session history to show in the AI Credits session table |
 | `pricing.overrides` | `{}` | Per-model AIC rate overrides (credits per million tokens); supports `inputPerM`, `outputPerM`, `cachedPerM`, `cacheWritePerM` |
 
 Most settings can be changed directly from the dashboard without opening VS Code settings.

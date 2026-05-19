@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.8.3
+
+### Cost calculation fix — cached tokens (breaking change for existing cache)
+
+- **Fixed a significant cost over-estimation bug** where cached tokens were billed twice. Copilot debug logs report `attrs.inputTokens` as the total input (cached + uncached), and `attrs.cachedTokens` as the cached subset. The old code charged the full input rate on all `inputTokens` and then additionally charged the cached rate on `cachedTokens`, resulting in double-billing of every cached token. The fix computes `nonCachedInput = inputTokens − cachedTokens` and charges each bucket at its correct rate. Sessions with high cache-hit rates (common in agent mode with large, repeated context) were overestimated by up to 5–11×.
+- The same fix applies to OpenAI-format API usage fields (`usage.prompt_tokens_details.cached_tokens` / `usage.cached_tokens`) where `prompt_tokens` also includes the cached portion.
+- For Anthropic-format fields (`usage.cache_read_input_tokens`), no change — those are already reported separately from `input_tokens`.
+- **Session cache version bumped** from `v1` to `v2`. All previously cached session cost estimates are discarded on first load and re-computed from the raw log files with the corrected formula.
+
+### New: Rebuild Session Cache button
+
+- Added a **Rebuild** button in the AI Credits Settings section of the dashboard. Clicking it clears the session cache entirely and re-parses all log files from scratch. Useful after a pricing update or if session cost data looks wrong.
+
+### Other improvements
+
+- **Status bar now visible immediately on startup** — the extension showed a blank status bar item while the initial session cache was being built. It now shows a loading spinner from the moment it activates.
+- **Lookback default increased from 35 to 60 days** so more historical sessions are visible by default.
+- **Lookback setting description** added in the dashboard so the field purpose is self-explanatory.
+
+### Known limitation — cross-month session attribution
+
+Sessions that span a month boundary (e.g. started April 29, last message May 2) are attributed **entirely to the month of the last message**. The full session cost appears in May; April shows none of it. This means months where you had long-running cross-boundary sessions may appear slightly cheaper or more expensive than the true spend. A per-turn attribution model would be more accurate but requires a larger data structure change; this is tracked for a future release.
+
 ## 1.8.2
 
 - Rewrote README to cover both the Premium Requests and AI Credits dashboards with accurate feature descriptions and screenshots.

@@ -8,7 +8,7 @@ interface CacheEntry {
   lastAccessed: number;
 }
 
-const CACHE_KEY = 'sessionCache.v1';
+const CACHE_KEY = 'sessionCache.v2';
 
 export class SessionCache {
   private readonly map: Map<string, CacheEntry>;
@@ -39,5 +39,10 @@ export class SessionCache {
 
   async flush(): Promise<void> {
     await this.context.globalState.update(CACHE_KEY, Object.fromEntries(this.map));
+  }
+
+  async clear(): Promise<void> {
+    this.map.clear();
+    await this.context.globalState.update(CACHE_KEY, {});
   }
 }

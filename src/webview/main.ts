@@ -561,6 +561,11 @@ function renderHeader(
         <button class="btn btn-icon" data-action="refresh" title="Refresh">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.451 5.609l-.579-.939-1.068.812-.076.094a4.373 4.373 0 0 1 .554 1.9l.009.24A4.382 4.382 0 0 1 7.913 12.1a4.382 4.382 0 0 1-4.378-4.378A4.382 4.382 0 0 1 7.913 3.338c.554 0 1.085.103 1.571.291l.088.04V2.2l-.208-.065A5.557 5.557 0 0 0 7.913 1.9 5.536 5.536 0 0 0 1.784 7.722a6.129 6.129 0 0 0 6.129 6.128c3.382 0 6.128-2.746 6.128-6.128a6.09 6.09 0 0 0-.995-3.367l-.006-.01z"/><path d="M10.5 1.5L8.25 5h4.5L10.5 1.5z"/></svg>
         </button>
+        ${model.activeBillingView === 'ai-credits' ? `
+        <button class="btn btn-icon" data-scroll-to="credits-settings" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M9.1 4.4L8.6 2H7.4l-.5 2.4-.7.3-2-1.3-.9.8 1.3 2-.2.7-2.4.5v1.2l2.4.5.3.8-1.3 2 .8.8 2-1.3.8.3.4 2.3h1.2l.5-2.4.8-.3 2 1.3.8-.8-1.3-2 .3-.8 2.3-.4V7.4l-2.4-.5-.3-.8 1.3-2-.8-.8-2 1.3-.7-.2zM9.4 1l.5 2.4L12 2.1l1.5 1.5-1.4 2.1.6 1.5 2.4.5v2.1l-2.4.5-.5 1.5 1.4 2.1L12 13.9l-2.1-1.4-1.5.6-.5 2.4H5.8l-.5-2.4-1.5-.5-2.1 1.3L.2 12l1.4-2.1-.5-1.5-2.4-.5V5.8l2.4-.5.5-1.5-1.3-2.1L1.7 .2l2.1 1.4 1.5-.5L5.8 1h3.6zM8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 1a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+        </button>
+        ` : ''}
       </div>
     </header>
   `;
@@ -1323,7 +1328,7 @@ function renderCreditsSettings(config: ConfigSerialized): string {
   ].map(option => `<option value="${option.value}" ${config.statusBarCreditsFormat === option.value ? 'selected' : ''}>${esc(option.label)}</option>`).join('');
 
   return `
-    <section class="card credits-settings">
+    <section class="card credits-settings" id="credits-settings">
       <h2 class="card-title">AI Credits Settings</h2>
       <div class="settings-grid">
         <div class="setting-row">
@@ -1347,11 +1352,21 @@ function renderCreditsSettings(config: ConfigSerialized): string {
           </label>
         </div>
         <div class="setting-row ${!config.localLogsEnabled ? 'disabled' : ''}">
-          <label for="setting-lookback">Lookback</label>
+          <div class="setting-label-group">
+            <label for="setting-lookback">Lookback</label>
+            <span class="setting-desc muted">How many days of session history to show in the session table</span>
+          </div>
           <div class="input-suffix">
             <input type="number" id="setting-lookback" data-setting="localLogs.lookbackDays" min="1" max="365" value="${config.localLogsLookbackDays}" ${!config.localLogsEnabled ? 'disabled' : ''} />
             <span class="suffix">days</span>
           </div>
+        </div>
+        <div class="setting-row ${!config.localLogsEnabled ? 'disabled' : ''}">
+          <div class="setting-label-group">
+            <label>Rebuild Session Cache</label>
+            <span class="setting-desc muted">Re-parse all log files from scratch — use after a pricing update or if session data looks wrong</span>
+          </div>
+          <button class="btn btn-sm btn-ghost" data-action="rebuildSessionCache" ${!config.localLogsEnabled ? 'disabled' : ''}>Rebuild</button>
         </div>
       </div>
     </section>
@@ -1951,6 +1966,16 @@ function bindActions(): void {
   root.querySelectorAll<HTMLButtonElement>('button[data-action]').forEach(btn => {
     btn.addEventListener('click', () => {
       vscode.postMessage({ type: btn.dataset.action });
+    });
+  });
+}
+
+function bindScrollButtons(): void {
+  if (!root) { return; }
+  root.querySelectorAll<HTMLButtonElement>('button[data-scroll-to]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.scrollTo!);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 }

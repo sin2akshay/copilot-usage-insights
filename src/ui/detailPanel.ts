@@ -13,6 +13,7 @@ export interface DetailPanelHandlers {
   setBillingView: (view: string) => void | Promise<void>;
   enableAgentDebugLog: () => void | Promise<void>;
   openSessionSource: (sessionId: string) => void | Promise<void>;
+  rebuildSessionCache: () => void | Promise<void>;
   updateSetting: (key: string, value: unknown) => void | Promise<void>;
 }
 
@@ -73,6 +74,9 @@ export class DetailPanel implements vscode.Disposable {
           break;
         case 'enableAgentDebugLog':
           void this.handlers.enableAgentDebugLog();
+          break;
+        case 'rebuildSessionCache':
+          void this.handlers.rebuildSessionCache();
           break;
         case 'openSessionSource':
           if (typeof message.sessionId === 'string') {

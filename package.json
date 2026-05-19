@@ -2,7 +2,7 @@
   "name": "copilot-usage-insights",
   "displayName": "Copilot Usage Insights",
   "description": "Track GitHub Copilot premium requests in the VS Code status bar with a hover summary, dashboard, pacing, and optional billing details.",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "publisher": "sin2akshay",
   "license": "MIT",
   "pricing": "Free",
@@ -208,10 +208,10 @@
         },
         "copilotUsageInsights.localLogs.lookbackDays": {
           "type": "number",
-          "default": 35,
+          "default": 60,
           "minimum": 1,
           "maximum": 365,
-          "markdownDescription": "Maximum age, in days, of local Copilot chat sessions to include in the AI Credits session list."
+          "markdownDescription": "How many days of session history to show in the AI Credits session table. Increase to review older activity; decrease to limit memory use."
         },
         "copilotUsageInsights.pricing.overrides": {
           "type": "object",
