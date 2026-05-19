@@ -1157,7 +1157,7 @@ function renderExpandedDetail(session: ChatSessionSerialized, isTopSession: bool
         <div class="dqs-item"><span class="dqs-val mono">$${session.estimatedDollars.toFixed(2)}</span><span class="dqs-key">cost</span></div>
         <div class="dqs-item"><span class="dqs-val mono">${formatNumber(tokenTotal)}</span><span class="dqs-key">tokens</span></div>
         <div class="dqs-item"><span class="dqs-val mono">${session.turnCount}</span><span class="dqs-key">turns</span></div>
-        <div class="dqs-item"><span class="dqs-val mono">${duration}m</span><span class="dqs-key">duration</span></div>
+        <div class="dqs-item"><span class="dqs-val mono">${formatDuration(duration)}</span><span class="dqs-key">duration</span></div>
         <div class="dqs-item"><span class="dqs-val mono">${session.subAgentCount}</span><span class="dqs-key">sub-agents</span></div>
         <div class="dqs-item"><span class="dqs-val mono">${formatCreditsValue(avgPerTurn)}</span><span class="dqs-key">AIC/turn</span></div>
       </div>
@@ -1208,7 +1208,7 @@ function renderInsightPills(session: ChatSessionSerialized, rows: SessionModelRo
     pills.push(`<span class="insight-pill ip-purple">${session.subAgentCount} sub-agents spawned</span>`);
   }
   if (duration >= 60) {
-    pills.push(`<span class="insight-pill ip-blue">${duration} min session</span>`);
+    pills.push(`<span class="insight-pill ip-blue">${formatDuration(duration)} session</span>`);
   }
   return pills.slice(0, 3).join('');
 }
@@ -1326,7 +1326,7 @@ function renderMetaGrid(session: ChatSessionSerialized, duration: number, avgPer
   const items = [
     ['Started', fmt(session.startedAt)],
     ['Ended', fmt(session.lastTurnAt)],
-    ['Duration', `${duration} min`],
+    ['Duration', formatDuration(duration)],
     ['Editor', editorLabel],
     ['Workspace', session.workspaceName],
     ['Mode', session.mode],
@@ -1839,6 +1839,13 @@ function formatCreditsValue(value: number): string {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+}
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) { return `${minutes}m`; }
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
 function relativeTime(timestamp: number): string {

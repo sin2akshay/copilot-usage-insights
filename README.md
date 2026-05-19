@@ -73,7 +73,7 @@ For plans on the AI Credits billing model (rolling out June 2026). The extension
 | Overage cost so far | Dollars already spent above the allowance |
 | Days left in cycle | Calendar days until quota resets |
 
-**Session table** — a log of individual Copilot agent sessions pulled from local debug logs. Click any row to expand the full detail panel.
+**Session table** — a log of individual Copilot agent sessions pulled from local debug logs. Each row shows the Copilot-generated chat title as the primary label (e.g. "Fix auth middleware bug"), with workspace and relative time as secondary context. Click any row to expand the full detail panel. A gear icon in the header scrolls directly to the Settings section when the list is long.
 
 ![Session detail](assets/ai-credits-session-detail.png)
 
@@ -84,13 +84,15 @@ Each expanded session shows:
 - **Token composition** — stacked bar and legend for input, output, and cached tokens with percentages
 - **Cache insight** — callout when ≥ 48 % of tokens were served from cache, with estimated dollar savings
 - **Tool calls** — horizontal bar chart of the top 8 tools by call count, each bar in a distinct color
-- **Session info** — started, ended, duration, editor, workspace, mode, sub-agent count, and average AIC per turn
+- **Session info** — started, ended, duration (shown as `1h 23m`), editor, workspace, mode, sub-agent count, and average AIC per turn
 
 ---
 
 ### How session data is collected
 
-The session table reads metadata from VS Code Copilot agent debug logs on your local machine. The log parser strips all prompt text, response text, tool arguments, tool results, and file contents before building session records. Only timestamps, model IDs, token counts, tool names, workspace folder name, and mode are retained. No session data is sent anywhere.
+The session table reads metadata from VS Code Copilot agent debug logs on your local machine. The log parser strips all prompt text, response text, tool arguments, tool results, and file contents before building session records. Only timestamps, model IDs, token counts, tool names, workspace folder name, mode, and the Copilot-generated session title are retained. No session data is sent anywhere.
+
+> **Note:** The figures shown in the AI Credits dashboard are **local estimates** based on debug log token counts and GitHub's published pricing — not pulled from GitHub's billing systems. Subscription allowances and discounts mean your actual bill will differ. For the authoritative number, check your GitHub billing page.
 
 Enable debug logging with **Enable agent debug logging** in the dashboard, or by setting `github.copilot.advanced.debug.useNodeDebugger` in VS Code settings. The extension scans both Stable and Insiders workspace storage by default.
 
@@ -125,7 +127,7 @@ This extension is distributed through GitHub Releases as a `.vsix` package.
 ### Option 2: Install from the command line
 
 ```powershell
-code --install-extension path\to\copilot-usage-insights-1.8.2.vsix
+code --install-extension path\to\copilot-usage-insights-1.9.0.vsix
 ```
 
 ## Quick Start

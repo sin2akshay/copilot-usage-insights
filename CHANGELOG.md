@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.9.0
+
+### Session chat titles in the session list
+
+The session table now shows the **Copilot-generated chat title** as the primary identifier for each row, making it much easier to recognise which conversation a session came from. The title (e.g. "Upgrade VS Code extension for tracking") is extracted from the `title` child log file that Copilot writes alongside each session's `main.jsonl`. Workspace name and relative time are displayed as secondary metadata below the title. Sessions from older Copilot versions that predate the title file fall back to the original time · workspace format.
+
+### Quick-jump Settings button
+
+A gear icon button is now shown in the dashboard header (next to Refresh and the month picker) when the AI Credits view is active. Clicking it smoothly scrolls the page to the Settings section at the bottom — useful when the session list is long.
+
+### One-time estimate disclaimer notice
+
+A dismissable notice now appears at the top of the AI Credits dashboard on first open, explaining that the credits and dollar amounts shown are local estimates calculated from debug logs rather than official GitHub billing data. Dismissing it writes a flag to VS Code global state so the notice never reappears, even after restarting VS Code.
+
+### Duration format
+
+Session durations are now shown in hours-and-minutes format (`1h 23m`) wherever a duration appears in the dashboard — the quick-stats strip, the Session Info grid, and the long-session insight pill. Durations under an hour continue to show as plain minutes (`45m`).
+
 ## 1.8.3
 
 ### Cost calculation fix — cached tokens (breaking change for existing cache)
