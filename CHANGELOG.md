@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.9.1
+
+- **Fixed month picker not visible on new installs.** The month dropdown was only rendered when sessions from more than one calendar month existed. On a fresh install with no cross-month history, it was always hidden. The picker now always appears: when only the current month is available it renders as a static `Month · May 2026` label; once sessions accumulate across multiple months it upgrades to the full dropdown automatically.
+
 ## 1.9.0
 
 ### Session chat titles in the session list

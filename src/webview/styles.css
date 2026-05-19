@@ -586,7 +586,7 @@ a:hover { text-decoration: underline; }
 /* ── AI Credits view ── */
 .credits-settings { gap: 16px; }
 
-.month-picker {
+.month-picker, .month-picker-static {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -601,6 +601,7 @@ a:hover { text-decoration: underline; }
   letter-spacing: 0;
   color: var(--input-fg);
 }
+.month-picker-value { text-transform: none; letter-spacing: 0; color: var(--fg); }
 
 .credits-empty {
   display: flex;

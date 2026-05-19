@@ -727,7 +727,11 @@ function renderStatusHero(
 }
 
 function renderCreditsMonthPicker(monthOptions: Array<{ value: string; label: string }>, selectedMonth: string): string {
-  if (monthOptions.length <= 1) { return ''; }
+  if (monthOptions.length === 0) { return ''; }
+  const currentLabel = monthOptions.find(o => o.value === selectedMonth)?.label ?? selectedMonth;
+  if (monthOptions.length === 1) {
+    return `<span class="month-picker-static"><span>Month</span><span class="month-picker-value">${esc(currentLabel)}</span></span>`;
+  }
   return `
     <label class="month-picker">
       <span>Month</span>
