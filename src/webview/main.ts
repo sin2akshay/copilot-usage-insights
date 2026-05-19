@@ -278,6 +278,7 @@ function render(model: DetailViewModelSerialized): void {
       </main>
     `;
     bindActions();
+    bindScrollButtons();
     bindSettings();
     bindBillingViewToggle();
     bindCreditsInteractions();
@@ -508,6 +509,7 @@ function render(model: DetailViewModelSerialized): void {
   `;
 
   bindActions();
+  bindScrollButtons();
   bindSettings();
   bindBillingViewToggle();
 }
@@ -529,6 +531,7 @@ function renderSignIn(): void {
     </main>
   `;
   bindActions();
+  bindScrollButtons();
 }
 
 function renderHeader(
