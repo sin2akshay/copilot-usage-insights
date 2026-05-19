@@ -73,6 +73,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await sessionCache.clear();
       void refresh(false, true);
     },
+    dismissCreditsNotice: async () => {
+      await globalState.update('creditsNoticeDismissed', true);
+      detailPanel.update(getDetailViewModel());
+    },
     updateSetting: (key: string, value: unknown) => {
       const allowedKeys = [
         'refreshIntervalMinutes',
@@ -320,6 +324,7 @@ function getDetailViewModel(): DetailViewModel {
     credits: activeBillingView === 'ai-credits' ? lastCreditsAggregate : null,
     sessions: activeBillingView === 'ai-credits' ? lastSessions : [],
     agentDebugLogEnabled: isAgentDebugLogEnabled(),
+    showEstimateNotice: !globalState.get('creditsNoticeDismissed', false),
     billing: lastBillingData,
   };
 }

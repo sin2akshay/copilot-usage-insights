@@ -1,5 +1,6 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 
 import { estimateTokensFromChars, tokensToCredits } from '../billing/costCalculator';
 import type { ChatSession } from '../core/models';
@@ -39,7 +40,45 @@ const STRIPPED_FIELDS = new Set([
 
 export async function parseLogFile(filePath: string): Promise<ChatSession | null> {
   const raw = await fs.readFile(filePath, 'utf8');
-  return parseLogContent(raw, filePath);
+  const session = parseLogContent(raw, filePath);
+  if (!session) { return null; }
+
+  const title = await extractSessionTitle(raw, filePath);
+  if (title) { session.title = title; }
+  return session;
+}
+
+async function extractSessionTitle(raw: string, filePath: string): Promise<string | null> {
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.includes('"title"')) { continue; }
+    try {
+      const event = JSON.parse(line) as Record<string, unknown>;
+      const attrs = event.attrs as Record<string, unknown> | undefined;
+      if (attrs?.label === 'title' && typeof attrs.childLogFile === 'string') {
+        return readTitleFromChildFile(path.join(path.dirname(filePath), attrs.childLogFile));
+      }
+    } catch { /* ignore malformed lines */ }
+  }
+  return null;
+}
+
+async function readTitleFromChildFile(filePath: string): Promise<string | null> {
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.includes('"agent_response"')) { continue; }
+      try {
+        const event = JSON.parse(line) as Record<string, unknown>;
+        const attrs = event.attrs as Record<string, unknown> | undefined;
+        if (event.type === 'agent_response' && typeof attrs?.response === 'string') {
+          const parts = JSON.parse(attrs.response) as Array<{ parts: Array<{ type: string; content: string }> }>;
+          const text = parts[0]?.parts?.[0]?.content;
+          if (typeof text === 'string' && text.trim().length > 0) { return text.trim(); }
+        }
+      } catch { /* ignore */ }
+    }
+  } catch { /* file may not exist for older sessions */ }
+  return null;
 }
 
 export function parseLogContent(raw: string, filePath = ''): ChatSession | null {

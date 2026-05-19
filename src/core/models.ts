@@ -70,6 +70,7 @@ export interface ModelBreakdown {
 export interface ChatSession {
   id: string;
   filePath: string;
+  title?: string;
   workspaceName: string;
   editor: 'vscode' | 'vscode-insiders';
   mode: 'ask' | 'edit' | 'agent' | 'unknown';
@@ -202,5 +203,6 @@ export interface DetailViewModel {
   credits: CreditsAggregate | null;
   sessions: ChatSession[];
   agentDebugLogEnabled: boolean;
+  showEstimateNotice: boolean;
   billing: BillingData | null;
 }

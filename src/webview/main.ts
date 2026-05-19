@@ -98,6 +98,7 @@ interface CreditsAggregateSerialized {
 
 interface ChatSessionSerialized {
   id: string;
+  title?: string;
   workspaceName: string;
   editor: 'vscode' | 'vscode-insiders';
   mode: 'ask' | 'edit' | 'agent' | 'unknown';
@@ -148,6 +149,7 @@ interface DetailViewModelSerialized {
   credits: CreditsAggregateSerialized | null;
   sessions: ChatSessionSerialized[];
   agentDebugLogEnabled: boolean;
+  showEstimateNotice: boolean;
   billing: BillingDataSerialized | null;
 }
 
@@ -622,6 +624,7 @@ function renderCreditsView(model: DetailViewModelSerialized, updatedStr: string)
   const officialCredits = isCurrentCycle && model.credits?.source === 'github-api' ? model.credits : null;
 
   return `
+    ${model.showEstimateNotice ? renderEstimateNotice() : ''}
     ${renderStatusHero(credits, monthSessions, updatedStr, daysLeft)}
     ${renderBurnChart(monthSessions, credits, selectedMonth, officialCredits)}
     <div class="two-col">
@@ -630,6 +633,18 @@ function renderCreditsView(model: DetailViewModelSerialized, updatedStr: string)
     </div>
     ${renderSessionTable(model, monthSessions)}
     ${renderCreditsSettings(model.config)}
+  `;
+}
+
+function renderEstimateNotice(): string {
+  return `
+    <div class="estimate-notice" role="alert">
+      <div class="estimate-notice-body">
+        <span class="estimate-notice-icon">ℹ</span>
+        <span>The credits and dollar amounts shown here are <strong>local estimates</strong> calculated from your Copilot debug logs using GitHub's published pricing. They reflect your usage patterns but won't match your bill exactly — subscription allowances, discounts, and billing adjustments are applied on GitHub's end. For the authoritative number, check your GitHub billing page.</span>
+      </div>
+      <button class="estimate-notice-close" data-action="dismissCreditsNotice" title="Dismiss" aria-label="Dismiss notice">✕</button>
+    </div>
   `;
 }
 
@@ -1096,7 +1111,10 @@ function renderSessionRow(session: ChatSessionSerialized, isTopSession: boolean)
       data-models="${esc(models.join('|'))}"
       role="button" tabindex="0" aria-expanded="false">
       <td class="td-l">
-        ${isLive ? '<span class="live-dot" title="Live"></span> ' : ''}${esc(relativeTime(session.lastTurnAt))}<span class="muted" style="font-size:0.82em"> · ${esc(session.workspaceName)}</span>
+        ${session.title
+          ? `${isLive ? '<span class="live-dot" title="Live"></span>' : ''}<span class="session-title">${esc(session.title)}</span><div class="session-title-meta muted">${esc(relativeTime(session.lastTurnAt))} · ${esc(session.workspaceName)}</div>`
+          : `${isLive ? '<span class="live-dot" title="Live"></span> ' : ''}${esc(relativeTime(session.lastTurnAt))}<span class="muted" style="font-size:0.82em"> · ${esc(session.workspaceName)}</span>`
+        }
       </td>
       <td class="td-c"><span class="mode-pill mode-${session.mode}">${esc(session.mode)}</span></td>
       <td class="td-l"><div class="model-chips">${modelChips}${moreChip}</div></td>

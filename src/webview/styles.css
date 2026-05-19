@@ -613,6 +613,34 @@ a:hover { text-decoration: underline; }
   background: color-mix(in srgb, var(--fg) 3%, transparent);
 }
 
+/* ── Estimate Notice ── */
+.estimate-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.estimate-notice-body { display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; }
+.estimate-notice-icon { flex-shrink: 0; opacity: 0.7; margin-top: 1px; }
+.estimate-notice-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted, var(--fg));
+  opacity: 0.5;
+  font-size: 1em;
+  padding: 0 2px;
+  line-height: 1;
+  margin-top: 1px;
+}
+.estimate-notice-close:hover { opacity: 1; }
+
 /* ── Status Hero ── */
 .status-hero { gap: 12px; padding: 18px 22px; }
 .status-hero-over {
@@ -828,6 +856,8 @@ a:hover { text-decoration: underline; }
 .session-table .td-c { text-align: center; }
 .st-empty { padding: 20px !important; font-size: 0.88em; }
 
+.session-title { font-weight: 500; font-size: 0.88em; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.session-title-meta { font-size: 0.78em; margin-top: 1px; }
 .session-row { cursor: pointer; }
 .session-row:hover td { background: color-mix(in srgb, var(--fg) 3%, transparent); }
 .session-row:focus-visible td { outline: 2px solid var(--accent); outline-offset: -2px; }
